@@ -2,10 +2,11 @@
 
 ## Ваши данные для подключения:
 
-- **Токен бота**: `7970667333:AAG7fg-ZeW2Z-KOKVLH6EFwEJBBFHGEZtaA`
-- **Адрес панели x-ui**: `http://103.113.71.160:41280` (без /panel/)
-- **Логин**: `dd`
-- **Пароль**: `1I6MC7qv`
+Установите переменные окружения на сервере:
+- **Токен бота**: `TELEGRAM_BOT_TOKEN`
+- **Адрес панели x-ui**: `XUI_BASE_URL` (без /panel/)
+- **Логин**: `XUI_USERNAME`
+- **Пароль**: `XUI_PASSWORD`
 
 ## Способ 1: Быстрый запуск (для тестирования)
 
@@ -19,10 +20,10 @@ cp config.py.example config.py
 pip3 install -r requirements.txt
 
 # 3. Установите переменные окружения (если еще не установлены)
-export TELEGRAM_BOT_TOKEN="7970667333:AAG7fg-ZeW2Z-KOKVLH6EFwEJBBFHGEZtaA"
-export XUI_BASE_URL="http://103.113.71.160:41280"
-export XUI_USERNAME="dd"
-export XUI_PASSWORD="1I6MC7qv"
+export TELEGRAM_BOT_TOKEN="your_bot_token_here"
+export XUI_BASE_URL="http://your-server:port"
+export XUI_USERNAME="your_username"
+export XUI_PASSWORD="your_password"
 
 # 4. Запустите бота
 python3 bot.py
@@ -47,10 +48,10 @@ After=network.target
 Type=simple
 User=root
 WorkingDirectory=/root/x-ui-bot
-Environment="TELEGRAM_BOT_TOKEN=7970667333:AAG7fg-ZeW2Z-KOKVLH6EFwEJBBFHGEZtaA"
-Environment="XUI_BASE_URL=http://103.113.71.160:41280"
-Environment="XUI_USERNAME=dd"
-Environment="XUI_PASSWORD=1I6MC7qv"
+Environment="TELEGRAM_BOT_TOKEN=your_bot_token_here"
+Environment="XUI_BASE_URL=http://your-server:port"
+Environment="XUI_USERNAME=your_username"
+Environment="XUI_PASSWORD=your_password"
 ExecStart=/usr/bin/python3 /root/x-ui-bot/bot.py
 Restart=always
 RestartSec=10
@@ -88,11 +89,11 @@ chmod +x start_bot.sh
 
 ## Важные замечания
 
-1. **Адрес панели**: Используется `http://103.113.71.160:41280` (без `/panel/`), так как API работает на корневом пути.
+1. **Адрес панели**: Используйте адрес без `/panel/` в конце, так как API работает на корневом пути.
 
 2. **Проверка подключения**: Перед запуском убедитесь, что сервер может подключиться к x-ui:
    ```bash
-   curl http://103.113.71.160:41280/login
+   curl http://your-server:port/login
    ```
 
 3. **Безопасность**: Файлы с секретами (`.service`, `start_bot.sh`) не должны попадать в git (уже в `.gitignore`).

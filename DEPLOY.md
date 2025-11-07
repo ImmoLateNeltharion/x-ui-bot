@@ -15,19 +15,19 @@ pip3 install -r requirements.txt
 #### Вариант A: В текущей сессии (временный)
 
 ```bash
-export TELEGRAM_BOT_TOKEN="7970667333:AAG7fg-ZeW2Z-KOKVLH6EFwEJBBFHGEZtaA"
-export XUI_BASE_URL="http://103.113.71.160:41280"
-export XUI_USERNAME="dd"
-export XUI_PASSWORD="1I6MC7qv"
+export TELEGRAM_BOT_TOKEN="your_bot_token_here"
+export XUI_BASE_URL="http://your-server:port"
+export XUI_USERNAME="your_username"
+export XUI_PASSWORD="your_password"
 ```
 
 #### Вариант B: В файле ~/.bashrc или ~/.profile (постоянный для пользователя)
 
 ```bash
-echo 'export TELEGRAM_BOT_TOKEN="7970667333:AAG7fg-ZeW2Z-KOKVLH6EFwEJBBFHGEZtaA"' >> ~/.bashrc
-echo 'export XUI_BASE_URL="http://103.113.71.160:41280"' >> ~/.bashrc
-echo 'export XUI_USERNAME="dd"' >> ~/.bashrc
-echo 'export XUI_PASSWORD="1I6MC7qv"' >> ~/.bashrc
+echo 'export TELEGRAM_BOT_TOKEN="your_bot_token_here"' >> ~/.bashrc
+echo 'export XUI_BASE_URL="http://your-server:port"' >> ~/.bashrc
+echo 'export XUI_USERNAME="your_username"' >> ~/.bashrc
+echo 'export XUI_PASSWORD="your_password"' >> ~/.bashrc
 source ~/.bashrc
 ```
 
@@ -87,10 +87,10 @@ sudo journalctl -u xui-bot -f
 
 ```bash
 # Установите переменные окружения
-export TELEGRAM_BOT_TOKEN="7970667333:AAG7fg-ZeW2Z-KOKVLH6EFwEJBBFHGEZtaA"
-export XUI_BASE_URL="http://103.113.71.160:41280"
-export XUI_USERNAME="dd"
-export XUI_PASSWORD="1I6MC7qv"
+export TELEGRAM_BOT_TOKEN="your_bot_token_here"
+export XUI_BASE_URL="http://your-server:port"
+export XUI_USERNAME="your_username"
+export XUI_PASSWORD="your_password"
 
 # Создайте screen сессию
 screen -S xui-bot
@@ -106,10 +106,10 @@ python3 bot.py
 
 ```bash
 # Установите переменные окружения
-export TELEGRAM_BOT_TOKEN="7970667333:AAG7fg-ZeW2Z-KOKVLH6EFwEJBBFHGEZtaA"
-export XUI_BASE_URL="http://103.113.71.160:41280"
-export XUI_USERNAME="dd"
-export XUI_PASSWORD="1I6MC7qv"
+export TELEGRAM_BOT_TOKEN="your_bot_token_here"
+export XUI_BASE_URL="http://your-server:port"
+export XUI_USERNAME="your_username"
+export XUI_PASSWORD="your_password"
 
 # Создайте tmux сессию
 tmux new -s xui-bot
@@ -128,11 +128,11 @@ python3 bot.py
    chmod 600 .env  # если используете .env файл
    ```
 
-2. **Адрес x-ui панели**: Обратите внимание, что адрес панели `http://103.113.71.160:41280/panel/` должен быть указан как `http://103.113.71.160:41280` (без `/panel/`), так как API работает на корневом пути.
+2. **Адрес x-ui панели**: Обратите внимание, что адрес панели должен быть указан без `/panel/` в конце, так как API работает на корневом пути.
 
 3. **Проверка подключения**: Убедитесь, что сервер может подключиться к x-ui панели:
    ```bash
-   curl http://103.113.71.160:41280/login
+   curl http://your-server:port/login
    ```
 
 4. **Логи**: Логи бота будут выводиться в консоль. При использовании systemd логи доступны через `journalctl`.

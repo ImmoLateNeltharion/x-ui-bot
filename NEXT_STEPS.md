@@ -49,16 +49,16 @@ echo $XUI_PASSWORD
 Если переменные не отображаются, установите их заново:
 
 ```bash
-export TELEGRAM_BOT_TOKEN="7970667333:AAG7fg-ZeW2Z-KOKVLH6EFwEJBBFHGEZtaA"
-export XUI_BASE_URL="http://103.113.71.160:41280"
-export XUI_USERNAME="dd"
-export XUI_PASSWORD="1I6MC7qv"
+export TELEGRAM_BOT_TOKEN="your_bot_token_here"
+export XUI_BASE_URL="http://your-server:port"
+export XUI_USERNAME="your_username"
+export XUI_PASSWORD="your_password"
 ```
 
 ## Шаг 5: Проверьте подключение к x-ui панели (опционально)
 
 ```bash
-curl http://103.113.71.160:41280/login
+curl http://your-server:port/login
 ```
 
 Должен вернуться ответ от API (может быть ошибка, но это нормально - главное, что сервер отвечает).
@@ -107,10 +107,10 @@ After=network.target
 Type=simple
 User=root
 WorkingDirectory=/root/x-ui-bot
-Environment="TELEGRAM_BOT_TOKEN=7970667333:AAG7fg-ZeW2Z-KOKVLH6EFwEJBBFHGEZtaA"
-Environment="XUI_BASE_URL=http://103.113.71.160:41280"
-Environment="XUI_USERNAME=dd"
-Environment="XUI_PASSWORD=1I6MC7qv"
+Environment="TELEGRAM_BOT_TOKEN=your_bot_token_here"
+Environment="XUI_BASE_URL=http://your-server:port"
+Environment="XUI_USERNAME=your_username"
+Environment="XUI_PASSWORD=your_password"
 ExecStart=/usr/bin/python3 /root/x-ui-bot/bot.py
 Restart=always
 RestartSec=10
@@ -147,7 +147,7 @@ sudo journalctl -u xui-bot -f
 ### Ошибка: "Не удалось авторизоваться в x-ui"
 - Проверьте правильность URL, логина и пароля
 - Убедитесь, что сервер может подключиться к x-ui панели
-- Проверьте, что x-ui панель работает: `curl http://103.113.71.160:41280/login`
+- Проверьте, что x-ui панель работает: `curl http://your-server:port/login`
 
 ### Ошибка: "ModuleNotFoundError: No module named 'config'"
 - Создайте файл `config.py`: `cp config.py.example config.py`
