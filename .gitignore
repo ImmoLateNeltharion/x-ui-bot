@@ -32,6 +32,7 @@ fix_xui_url.py
 SSH_COMMANDS.md
 deploy.py
 test_api.py
+deploy_remote.py
 *.py
 !bot.py
 !database.py
