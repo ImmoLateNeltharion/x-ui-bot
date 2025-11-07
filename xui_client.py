@@ -33,11 +33,30 @@ class XUIClient:
             if response.status_code == 200:
                 data = response.json()
                 if data.get("success"):
-                    self.token = data.get("data", {}).get("token")
+                    # Токен может быть в cookies или в заголовках
+                    # Проверяем cookies
+                    cookies = response.cookies
+                    if cookies:
+                        # Ищем токен в cookies
+                        for cookie in cookies:
+                            if 'token' in cookie.name.lower() or 'auth' in cookie.name.lower():
+                                self.token = cookie.value
+                                break
+                    
+                    # Если токен не найден в cookies, пробуем в JSON
+                    if not self.token:
+                        self.token = data.get("data", {}).get("token")
+                    
+                    # Если токен найден, добавляем в заголовки
                     if self.token:
                         self.session.headers.update({
                             "Authorization": f"Bearer {self.token}"
                         })
+                    else:
+                        # Если токен не найден, используем cookies напрямую
+                        # x-ui может использовать cookie-based аутентификацию
+                        pass
+                    
                     return True
             return False
         except Exception as e:
