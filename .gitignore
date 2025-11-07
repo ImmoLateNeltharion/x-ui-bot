@@ -18,6 +18,9 @@ ENV/
 config.py
 upload.py
 setup_git.py
+.env
+start_bot.sh
+*.service
 
 # Логи
 *.log

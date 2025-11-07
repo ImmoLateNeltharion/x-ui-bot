@@ -17,13 +17,15 @@
 
 ```
 .
-├── bot.py              # Основной файл бота
-├── database.py         # Модуль для работы с базой данных
-├── xui_client.py       # Модуль для работы с x-ui API
-├── config.py.example   # Пример файла конфигурации
-├── requirements.txt    # Зависимости проекта
-├── README.md           # Документация
-└── .gitignore          # Игнорируемые файлы Git
+├── bot.py                  # Основной файл бота
+├── database.py             # Модуль для работы с базой данных
+├── xui_client.py           # Модуль для работы с x-ui API
+├── config.py.example       # Пример файла конфигурации
+├── requirements.txt        # Зависимости проекта
+├── README.md               # Документация
+├── DEPLOY.md               # Инструкция по развертыванию на сервере
+├── xui-bot.service.example # Пример systemd service файла
+└── .gitignore              # Игнорируемые файлы Git
 
 # Файлы, которые создаются при работе:
 ├── config.py           # Файл конфигурации (не коммитится в git)
@@ -98,9 +100,32 @@ export XUI_PASSWORD="ваш_пароль"
 
 ## Запуск
 
+### Локальный запуск
+
 ```bash
 python bot.py
 ```
+
+### Запуск на сервере
+
+Для развертывания на сервере см. подробную инструкцию в [DEPLOY.md](DEPLOY.md)
+
+**Быстрый старт на сервере:**
+
+1. Установите переменные окружения:
+```bash
+export TELEGRAM_BOT_TOKEN="ваш_токен"
+export XUI_BASE_URL="http://ваш-сервер:порт"
+export XUI_USERNAME="ваш_логин"
+export XUI_PASSWORD="ваш_пароль"
+```
+
+2. Запустите бота:
+```bash
+python3 bot.py
+```
+
+Или используйте systemd service (см. DEPLOY.md)
 
 ## Использование
 
