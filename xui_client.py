@@ -79,8 +79,21 @@ class XUIClient:
                 data = response.json()
                 if data.get("success"):
                     inbound = data.get("obj", {})
+                    
+                    # Клиенты могут быть в поле "clients" или в "settings" как JSON строка
                     clients = inbound.get("clients", [])
-                    return clients
+                    
+                    # Если клиентов нет, пробуем извлечь из settings
+                    if not clients:
+                        settings_str = inbound.get("settings", "")
+                        if settings_str:
+                            try:
+                                settings = json.loads(settings_str)
+                                clients = settings.get("clients", [])
+                            except:
+                                pass
+                    
+                    return clients if clients else []
             return []
         except Exception as e:
             print(f"Ошибка получения клиентов: {e}")
