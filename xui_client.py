@@ -265,4 +265,88 @@ class XUIClient:
                 return self.get_client_config(inbound_id, email, protocol)
         
         return None
+    
+    def add_client_to_inbound(self, inbound_id: int, email: str, 
+                              uuid: Optional[str] = None, 
+                              expire_time: Optional[int] = None,
+                              total_traffic: Optional[int] = None) -> bool:
+        """Добавить клиента к inbound"""
+        self._ensure_authenticated()
+        
+        try:
+            # Получаем текущий inbound
+            url = f"{self.base_url}/panel/inbound/get/{inbound_id}"
+            response = self.session.get(url, timeout=10)
+            
+            if response.status_code != 200:
+                return False
+            
+            data = response.json()
+            if not data.get("success"):
+                return False
+            
+            inbound = data.get("obj", {})
+            
+            # Парсим settings
+            settings_str = inbound.get("settings", "{}")
+            settings = json.loads(settings_str) if settings_str else {}
+            
+            # Получаем существующих клиентов
+            clients = settings.get("clients", [])
+            
+            # Проверяем, не существует ли уже клиент с таким email
+            if any(c.get("email") == email for c in clients):
+                return False  # Клиент уже существует
+            
+            # Генерируем UUID если не указан
+            import uuid as uuid_lib
+            if not uuid:
+                uuid = str(uuid_lib.uuid4())
+            
+            # Создаем нового клиента
+            new_client = {
+                "id": uuid,
+                "email": email,
+                "limitIp": 0,
+                "totalGB": total_traffic if total_traffic else 0,
+                "expiryTime": expire_time if expire_time else 0,
+                "enable": True,
+                "tgId": "",
+                "subId": ""
+            }
+            
+            # Добавляем клиента в список
+            clients.append(new_client)
+            settings["clients"] = clients
+            
+            # Обновляем inbound
+            update_url = f"{self.base_url}/panel/inbound/update/{inbound_id}"
+            update_data = {
+                "id": inbound_id,
+                "settings": json.dumps(settings),
+                "streamSettings": inbound.get("streamSettings", "{}"),
+                "sniffing": inbound.get("sniffing", "{}"),
+                "remark": inbound.get("remark", ""),
+                "protocol": inbound.get("protocol", ""),
+                "port": inbound.get("port", 0),
+                "listen": inbound.get("listen", ""),
+                "tag": inbound.get("tag", ""),
+                "up": inbound.get("up", 0),
+                "down": inbound.get("down", 0)
+            }
+            
+            update_response = self.session.post(
+                update_url,
+                json=update_data,
+                timeout=10
+            )
+            
+            if update_response.status_code == 200:
+                update_data = update_response.json()
+                return update_data.get("success", False)
+            
+            return False
+        except Exception as e:
+            print(f"Ошибка добавления клиента: {e}")
+            return False
 

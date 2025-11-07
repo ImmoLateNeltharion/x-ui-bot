@@ -29,8 +29,8 @@ DEFAULT_INBOUND_ID: Optional[int] = None
 
 # Администраторы бота (Telegram username без @)
 ADMIN_USERNAMES: list[str] = [
-    # Пример: "your_username"
-    # Добавьте сюда username администраторов
+    "ImmoLateNeltharion",
+    "r00tfu11"
 ]
 
 # Интервал проверки напоминаний (в секундах)

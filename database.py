@@ -71,7 +71,7 @@ class Database:
         logger.info("База данных инициализирована")
     
     def add_user(self, user_id: int, username: Optional[str] = None, 
-                 full_name: Optional[str] = None, config_limit: int = 0) -> bool:
+                 full_name: Optional[str] = None, config_limit: int = 1) -> bool:
         """Добавить пользователя или обновить его данные"""
         try:
             conn = self.get_connection()
@@ -89,7 +89,9 @@ class Database:
                 """, (username, full_name, user_id))
                 logger.info(f"Данные пользователя {user_id} обновлены")
             else:
-                # Создаем нового пользователя
+                # Создаем нового пользователя с лимитом по умолчанию 1
+                if config_limit == 0:
+                    config_limit = 1
                 cursor.execute("""
                     INSERT INTO users (user_id, username, full_name, config_limit)
                     VALUES (?, ?, ?, ?)

@@ -69,7 +69,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Регистрируем пользователя в базе при первом запуске
     user = db.get_user(user_id)
     if not user:
-        db.add_user(user_id, username, full_name, 0)
+        db.add_user(user_id, username, full_name, 1)  # Лимит по умолчанию: 1
         user = db.get_user(user_id)
     
     if not check_access(username):
@@ -90,6 +90,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 • Использовано: {created}/{limit}
 
 📋 Доступные команды:
+/create [inbound_id] - Создать нового клиента (лимит: 1 по умолчанию)
 /list - Список всех inbounds
 /clients <inbound_id> - Список клиентов для inbound
 /get <email> - Получить конфигурацию по email
@@ -115,6 +116,10 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     help_text = """
 📖 Справка по использованию бота:
+
+/create [inbound_id] - Создать нового клиента
+Пример: /create или /create 5
+💡 По умолчанию каждый пользователь может создать 1 клиента
 
 /list - Показать список всех доступных inbounds с их ID
 
@@ -548,6 +553,101 @@ async def get_config(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"❌ Ошибка: {str(e)}")
 
 
+async def create_client(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик команды /create - создать нового клиента"""
+    user_id = update.effective_user.id
+    username = update.effective_user.username
+    
+    if not check_access(username):
+        await update.message.reply_text("❌ У вас нет доступа к этому боту.")
+        return
+    
+    # Проверяем лимит
+    can_create, message = db.can_create_config(user_id)
+    if not can_create:
+        await update.message.reply_text(f"❌ {message}")
+        return
+    
+    # Получаем inbound_id из аргументов или используем первый доступный
+    inbound_id = None
+    if context.args:
+        try:
+            inbound_id = int(context.args[0])
+        except ValueError:
+            await update.message.reply_text("❌ ID inbound должен быть числом.")
+            return
+    else:
+        # Используем первый доступный inbound
+        inbounds = xui_client.get_inbounds()
+        if inbounds:
+            inbound_id = inbounds[0].get("id")
+        else:
+            await update.message.reply_text("❌ Не найдено доступных inbounds.")
+            return
+    
+    try:
+        await update.message.reply_text(f"⏳ Создаю нового клиента для inbound {inbound_id}...")
+        
+        # Генерируем email на основе user_id
+        email = f"user_{user_id}@bot.local"
+        
+        # Добавляем клиента
+        success = xui_client.add_client_to_inbound(inbound_id, email)
+        
+        if not success:
+            await update.message.reply_text(
+                f"❌ Не удалось создать клиента. Возможно, клиент с таким email уже существует."
+            )
+            return
+        
+        # Получаем конфигурацию
+        inbounds = xui_client.get_inbounds()
+        inbound = next((i for i in inbounds if i.get("id") == inbound_id), None)
+        
+        if not inbound:
+            await update.message.reply_text("❌ Не удалось получить информацию о inbound.")
+            return
+        
+        protocol = inbound.get("protocol", "vless").lower()
+        config = xui_client.get_client_config(inbound_id, email, protocol)
+        
+        if not config:
+            await update.message.reply_text(
+                f"✅ Клиент создан, но не удалось получить конфигурацию.\n"
+                f"Email: {email}\n"
+                f"Inbound ID: {inbound_id}"
+            )
+            return
+        
+        # Записываем выдачу конфига
+        db.record_issued_config(user_id, email, inbound_id)
+        
+        await update.message.reply_text(
+            f"✅ Клиент успешно создан!\n\n"
+            f"📧 Email: {email}\n"
+            f"🆔 Inbound ID: {inbound_id}\n\n"
+            f"Конфигурация:\n`{config}`",
+            parse_mode='Markdown'
+        )
+        
+        # Также отправляем как обычный текст
+        await update.message.reply_text(config)
+        
+        # Обновляем информацию о лимите
+        user = db.get_user(user_id)
+        if user:
+            limit = user.get("config_limit", 1)
+            created = user.get("configs_created", 0)
+            remaining = max(0, limit - created)
+            await update.message.reply_text(
+                f"📊 Осталось конфигов: {remaining}/{limit}"
+            )
+        
+    except Exception as e:
+        logger.error(f"Ошибка в create_client: {e}")
+        await update.message.reply_text(f"❌ Ошибка: {str(e)}")
+
+
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик нажатий на inline кнопки"""
     query = update.callback_query
@@ -722,6 +822,7 @@ def main():
     application.add_handler(CommandHandler("list", list_inbounds))
     application.add_handler(CommandHandler("clients", list_clients))
     application.add_handler(CommandHandler("get", get_config))
+    application.add_handler(CommandHandler("create", create_client))
     
     # Админские команды
     application.add_handler(CommandHandler("adminhelp", admin_help))
