@@ -31,6 +31,11 @@ check_xui_connection.py
 fix_xui_url.py
 SSH_COMMANDS.md
 deploy.py
+test_api.py
+*.py
+!bot.py
+!database.py
+!xui_client.py
 
 # Логи
 *.log
