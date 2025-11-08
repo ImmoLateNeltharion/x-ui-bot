@@ -3,6 +3,7 @@ Telegram бот для выдачи VPN конфигураций из x-ui
 """
 import logging
 import asyncio
+import os
 from datetime import datetime, timedelta
 from typing import Optional
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, Message, Chat, User, ReplyKeyboardMarkup, KeyboardButton
@@ -1096,20 +1097,46 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             await query.edit_message_text(instruction_text)
             
-            # Пытаемся отправить видео, если file_id указан в конфиге
+            # Отправляем видео из файла instruction.mp4
             try:
-                from config import INSTRUCTION_VIDEO_FILE_ID
-                if INSTRUCTION_VIDEO_FILE_ID:
-                    await context.bot.send_video(
-                        chat_id=query.message.chat_id,
-                        video=INSTRUCTION_VIDEO_FILE_ID,
-                        caption="📹 Видео инструкция по использованию бота"
-                    )
-            except ImportError:
-                # Если INSTRUCTION_VIDEO_FILE_ID не указан, просто пропускаем
-                pass
+                # Получаем путь к файлу относительно текущей директории скрипта
+                script_dir = os.path.dirname(os.path.abspath(__file__))
+                video_path = os.path.join(script_dir, "instruction.mp4")
+                
+                if os.path.exists(video_path):
+                    with open(video_path, 'rb') as video_file:
+                        await context.bot.send_video(
+                            chat_id=query.message.chat_id,
+                            video=video_file,
+                            caption="📹 Видео инструкция по использованию бота"
+                        )
+                    logger.info(f"Видео инструкция отправлена из файла: {video_path}")
+                else:
+                    logger.warning(f"Файл видео инструкции не найден: {video_path}")
+                    # Пытаемся отправить по file_id, если файл не найден
+                    try:
+                        from config import INSTRUCTION_VIDEO_FILE_ID
+                        if INSTRUCTION_VIDEO_FILE_ID:
+                            await context.bot.send_video(
+                                chat_id=query.message.chat_id,
+                                video=INSTRUCTION_VIDEO_FILE_ID,
+                                caption="📹 Видео инструкция по использованию бота"
+                            )
+                    except ImportError:
+                        pass
             except Exception as e:
                 logger.error(f"Ошибка при отправке видео инструкции: {e}")
+                # Пытаемся отправить по file_id в случае ошибки
+                try:
+                    from config import INSTRUCTION_VIDEO_FILE_ID
+                    if INSTRUCTION_VIDEO_FILE_ID:
+                        await context.bot.send_video(
+                            chat_id=query.message.chat_id,
+                            video=INSTRUCTION_VIDEO_FILE_ID,
+                            caption="📹 Видео инструкция по использованию бота"
+                        )
+                except ImportError:
+                    pass
             
             return
         elif data == "contact_admin":
