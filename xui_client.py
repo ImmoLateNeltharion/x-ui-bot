@@ -215,12 +215,23 @@ class XUIClient:
         self._ensure_authenticated()
         
         try:
-            url = f"{self.base_url}/panel/inbound/getClientTraffics/{email}"
-            response = self.session.get(url, timeout=10)
+            # Получаем детали inbound - пробуем разные варианты URL
+            urls_to_try = [
+                f"{self.base_url}/xui/inbound/get/{inbound_id}",
+                f"{self.base_url}/panel/inbound/get/{inbound_id}",
+                f"{self.base_url}/api/inbound/get/{inbound_id}",
+                f"{self.base_url}/inbound/get/{inbound_id}"
+            ]
             
-            # Получаем детали inbound
-            inbound_url = f"{self.base_url}/panel/inbound/get/{inbound_id}"
-            inbound_response = self.session.get(inbound_url, timeout=10)
+            inbound_response = None
+            for url in urls_to_try:
+                test_response = self.session.get(url, timeout=10)
+                if test_response.status_code == 200:
+                    inbound_response = test_response
+                    break
+            
+            if not inbound_response:
+                return None
             
             if inbound_response.status_code == 200:
                 inbound_data = inbound_response.json()
@@ -345,9 +356,23 @@ class XUIClient:
             if inbound_id is None:
                 return None
         
-        # Определяем протокол из inbound
-        inbound_url = f"{self.base_url}/panel/inbound/get/{inbound_id}"
-        response = self.session.get(inbound_url, timeout=10)
+            # Определяем протокол из inbound - пробуем разные варианты URL
+            urls_to_try = [
+                f"{self.base_url}/xui/inbound/get/{inbound_id}",
+                f"{self.base_url}/panel/inbound/get/{inbound_id}",
+                f"{self.base_url}/api/inbound/get/{inbound_id}",
+                f"{self.base_url}/inbound/get/{inbound_id}"
+            ]
+            
+            response = None
+            for url in urls_to_try:
+                test_response = self.session.get(url, timeout=10)
+                if test_response.status_code == 200:
+                    response = test_response
+                    break
+            
+            if not response:
+                return None
         
         if response.status_code == 200:
             data = response.json()
@@ -457,8 +482,7 @@ class XUIClient:
                 logger.error("Все варианты URL для обновления inbound не сработали")
                 return False
             
-            logger.info(f"Обновление inbound {inbound_id}: {update_url}")
-            
+            # Подготавливаем данные для обновления
             update_data = {
                 "id": inbound_id,
                 "settings": json.dumps(settings),
@@ -473,6 +497,7 @@ class XUIClient:
                 "down": inbound.get("down", 0)
             }
             
+            logger.info(f"Обновление inbound {inbound_id}: {update_url}")
             
             if update_response.status_code == 200:
                 try:
