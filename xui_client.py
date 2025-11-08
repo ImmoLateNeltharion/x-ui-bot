@@ -104,31 +104,18 @@ class XUIClient:
         try:
             # Пробуем разные варианты URL и методов
             # x-ui может использовать разные пути и методы
+            # Приоритет: сначала пробуем наиболее вероятные варианты
             url_methods = [
-                # GET запросы с /api/
-                (f"{self.base_url}/panel/api/inbounds/list", "GET"),  # С "s" в конце
-                (f"{self.base_url}/panel/api/inbound/list", "GET"),
-                (f"{self.base_url}/xui/api/inbounds/list", "GET"),
-                (f"{self.base_url}/xui/api/inbound/list", "GET"),
-                (f"{self.base_url}/api/inbounds/list", "GET"),
-                (f"{self.base_url}/api/inbound/list", "GET"),
-                # GET запросы без /api/
-                (f"{self.base_url}/panel/inbounds/list", "GET"),
-                (f"{self.base_url}/panel/inbound/list", "GET"),
-                (f"{self.base_url}/xui/inbounds/list", "GET"),
-                (f"{self.base_url}/xui/inbound/list", "GET"),
-                (f"{self.base_url}/inbounds/list", "GET"),
-                (f"{self.base_url}/inbound/list", "GET"),
-                # POST запросы с /api/
-                (f"{self.base_url}/panel/api/inbounds/list", "POST"),
-                (f"{self.base_url}/panel/api/inbound/list", "POST"),
-                (f"{self.base_url}/xui/api/inbounds/list", "POST"),
-                (f"{self.base_url}/xui/api/inbound/list", "POST"),
-                (f"{self.base_url}/api/inbounds/list", "POST"),
-                (f"{self.base_url}/api/inbound/list", "POST"),
-                # POST запросы без /api/
-                (f"{self.base_url}/panel/inbounds/list", "POST"),
+                # POST запросы (x-ui часто использует POST для API)
                 (f"{self.base_url}/panel/inbound/list", "POST"),
+                (f"{self.base_url}/panel/api/inbound/list", "POST"),
+                (f"{self.base_url}/panel/inbounds/list", "POST"),
+                (f"{self.base_url}/panel/api/inbounds/list", "POST"),
+                # GET запросы
+                (f"{self.base_url}/panel/inbound/list", "GET"),
+                (f"{self.base_url}/panel/api/inbound/list", "GET"),
+                (f"{self.base_url}/panel/inbounds/list", "GET"),
+                (f"{self.base_url}/panel/api/inbounds/list", "GET"),
             ]
             
             for url, method in url_methods:
@@ -157,9 +144,32 @@ class XUIClient:
                                 logger.warning(f"API вернул success=False: {error_msg}")
                         except json.JSONDecodeError as e:
                             logger.warning(f"Ошибка парсинга JSON: {e}, текст: {response.text[:200]}")
-                    elif response.status_code != 404:
+                    elif response.status_code == 404:
+                        # 404 - просто пробуем следующий вариант
+                        logger.debug(f"404 для {method} {url}")
+                    else:
                         # Если не 404, возможно это правильный URL, но с ошибкой
                         logger.warning(f"HTTP ошибка для {method} {url}: {response.status_code}, ответ: {response.text[:200]}")
+                        # Если получили ответ (не 404), возможно это правильный URL, но с ошибкой авторизации
+                        # Попробуем переавторизоваться и повторить запрос
+                        if response.status_code in [401, 403]:
+                            logger.info(f"Получен {response.status_code}, пробуем переавторизоваться...")
+                            if self._login():
+                                # Повторяем запрос после переавторизации
+                                if method == "GET":
+                                    retry_response = self.session.get(url, timeout=10)
+                                else:
+                                    retry_response = self.session.post(url, json={}, timeout=10)
+                                
+                                if retry_response.status_code == 200:
+                                    try:
+                                        retry_data = retry_response.json()
+                                        if retry_data.get("success"):
+                                            inbounds = retry_data.get("obj", [])
+                                            logger.info(f"✅ Успешно получено inbounds после переавторизации: {len(inbounds) if inbounds else 0}")
+                                            return inbounds if inbounds else []
+                                    except:
+                                        pass
                 except Exception as e:
                     logger.warning(f"Ошибка при запросе {method} {url}: {e}")
             
