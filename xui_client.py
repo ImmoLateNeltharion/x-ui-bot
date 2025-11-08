@@ -119,13 +119,15 @@ class XUIClient:
                 # POST запросы (x-ui часто использует POST для API)
                 (f"{self.base_url}/panel/panel/inbound/list", "POST"),
                 (f"{self.base_url}/panel/panel/api/inbound/list", "POST"),
+                (f"{self.base_url}/panel/api/inbound/list", "POST"),
+                (f"{self.base_url}/panel/inbound/list", "POST"),
                 (f"{self.base_url}/panel/panel/inbounds", "POST"),
                 (f"{self.base_url}/panel/panel/api/inbounds", "POST"),
                 # GET запросы (могут возвращать HTML, но пробуем с правильными заголовками)
                 (f"{self.base_url}/panel/panel/inbound/list", "GET"),
                 (f"{self.base_url}/panel/panel/api/inbound/list", "GET"),
-                (f"{self.base_url}/panel/panel/inbounds", "GET"),
-                (f"{self.base_url}/panel/panel/api/inbounds", "GET"),
+                (f"{self.base_url}/panel/api/inbound/list", "GET"),
+                (f"{self.base_url}/panel/inbound/list", "GET"),
             ]
             
             for url, method in url_methods:
