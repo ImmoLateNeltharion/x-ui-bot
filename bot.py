@@ -20,6 +20,7 @@ from config import (
     TELEGRAM_BOT_TOKEN, 
     ALLOWED_USERNAMES, 
     DEFAULT_INBOUND_ID,
+    CONFIG_EXPIRY_DAYS,
     ADMIN_USERNAMES,
     REMINDER_CHECK_INTERVAL,
     REMINDER_DAYS
@@ -84,37 +85,25 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
     
-    limit = user.get("config_limit", 0) if user else 0
-    created = user.get("configs_created", 0) if user else 0
-    
-    welcome_text = f"""
-🤖 Привет! Я бот для получения VPN конфигураций из x-ui.
-
-📊 Ваш статус:
-• Лимит конфигов: {limit}
-• Использовано: {created}/{limit}
+    welcome_text = """
+🤖 Привет! Я бот для получения VPN конфигураций.
 
 📋 Доступные команды:
-/create [inbound_id] - Создать нового клиента (лимит: 1 по умолчанию)
-/list - Список всех inbounds
-/clients <inbound_id> - Список клиентов для inbound
-/get <email> - Получить конфигурацию по email
-/myinfo - Моя информация
-/help - Показать справку
+• Создание конфига
+• Скачивание конфига
+• Информация о конфиге
+• Связь с администратором
 
-💡 Используйте /list чтобы увидеть доступные серверы.
+💡 Используйте кнопки ниже для работы с ботом.
 """
-    
-    if is_admin(username):
-        welcome_text += "\n🔧 Админские команды:\n/adminhelp - Справка по админским командам"
     
     # Добавляем кнопки для быстрого доступа
     keyboard = [
         [
-            InlineKeyboardButton("✨ Создать клиента", callback_data="create_menu")
+            InlineKeyboardButton("✨ Создать конфиг", callback_data="create_config")
         ],
         [
-            InlineKeyboardButton("📥 Получить свой конфиг", callback_data="get_my_config")
+            InlineKeyboardButton("📥 Скачать конфиг", callback_data="download_config")
         ],
         [
             InlineKeyboardButton("📊 Информация о конфиге", callback_data="config_info")
@@ -861,68 +850,11 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     try:
         # Обработка кнопок меню
-        if data == "create_menu":
-            await query.answer("Открываю меню создания клиента...")
-            # Вызываем create_client напрямую через callback
-            # Создаем временное сообщение для обработки
-            temp_msg = await query.message.reply_text("⏳ Получаю список серверов...")
-            inbounds = xui_client.get_inbounds()
-            
-            logger.info(f"Получено inbounds: {len(inbounds) if inbounds else 0}")
-            
-            if not inbounds:
-                await temp_msg.edit_text(
-                    "❌ Не удалось получить список inbounds или список пуст.\n"
-                    "Проверьте подключение к x-ui панели."
-                )
-                return
-            
-            text = "📋 Выберите сервер для создания клиента:\n\n"
-            keyboard = []
-            
-            for inbound in inbounds:
-                inbound_id = inbound.get("id")
-                remark = inbound.get("remark", f"Inbound {inbound_id}")
-                protocol = inbound.get("protocol", "unknown")
-                port = inbound.get("port", "N/A")
-                
-                text += f"🆔 ID: {inbound_id}\n"
-                text += f"📝 Название: {remark}\n"
-                text += f"🔌 Протокол: {protocol.upper()}\n"
-                text += f"🚪 Порт: {port}\n"
-                text += "─" * 20 + "\n\n"
-            
-            # Добавляем кнопки для каждого inbound в одну строку (2 кнопки в ряд)
-            buttons_per_row = 2
-            for i, inbound in enumerate(inbounds):
-                inbound_id = inbound.get("id")
-                remark = inbound.get("remark", f"Inbound {inbound_id}")
-                
-                if i % buttons_per_row == 0:
-                    keyboard.append([])
-                
-                keyboard[-1].append(
-                    InlineKeyboardButton(
-                        f"✨ {remark[:15]}",
-                        callback_data=f"create_{inbound_id}"
-                    )
-                )
-            
-            if not keyboard or not any(keyboard):
-                await temp_msg.edit_text("❌ Не удалось создать кнопки для выбора сервера.")
-                return
-            
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            total_buttons = sum(len(row) for row in keyboard)
-            logger.info(f"Отправляю сообщение с {len(keyboard)} строками кнопок, всего {total_buttons} кнопок")
-            
-            try:
-                await temp_msg.edit_text(text, reply_markup=reply_markup)
-            except Exception as e:
-                logger.error(f"Ошибка при отправке сообщения с кнопками: {e}")
-                await temp_msg.edit_text(f"❌ Ошибка при отправке кнопок: {str(e)}")
+        if data == "create_config":
+            # Создаем конфиг сразу для захардкоженного inbound
+            await _create_client_for_inbound(update, context, user_id, username, DEFAULT_INBOUND_ID)
             return
-        elif data == "get_my_config":
+        elif data == "download_config":
             await query.answer("Получаю ваш конфиг...")
             # Получаем конфиги пользователя
             user_configs = db.get_user_configs(user_id)
@@ -958,27 +890,65 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         elif data == "config_info":
             await query.answer("Показываю информацию о конфиге...")
-            user = db.get_user(user_id)
-            if not user:
-                await query.edit_message_text("❌ Пользователь не найден.")
+            
+            # Проверяем наличие username
+            if not username:
+                await query.edit_message_text(
+                    "❌ У вас не установлен username в настройках Telegram.\n"
+                    "💡 Установите username в настройках Telegram для просмотра информации о конфиге."
+                )
                 return
             
-            limit = user.get("config_limit", 0)
-            created = user.get("configs_created", 0)
-            remaining = max(0, limit - created)
+            email = username
+            inbound_id = DEFAULT_INBOUND_ID
             
-            user_configs = db.get_user_configs(user_id)
-            config_count = len(user_configs) if user_configs else 0
+            # Получаем информацию о клиенте из x-ui
+            clients = xui_client.get_inbound_clients(inbound_id)
+            client = next((c for c in clients if c.get("email") == email), None)
+            
+            if not client:
+                await query.edit_message_text(
+                    f"❌ Конфиг для {email} не найден.\n"
+                    "💡 Используйте кнопку '✨ Создать конфиг' для создания нового конфига."
+                )
+                return
+            
+            # Получаем данные о трафике
+            total_traffic = client.get("total", 0)  # в байтах
+            up_traffic = client.get("up", 0)  # в байтах
+            down_traffic = client.get("down", 0)  # в байтах
+            
+            # Конвертируем в GB
+            total_gb = total_traffic / (1024 ** 3)
+            up_gb = up_traffic / (1024 ** 3)
+            down_gb = down_traffic / (1024 ** 3)
+            
+            # Получаем информацию о сроке действия
+            expire_time = client.get("expireTime", 0)
+            if expire_time > 0:
+                from datetime import datetime
+                expire_date = datetime.fromtimestamp(expire_time / 1000)
+                now = datetime.now()
+                days_remaining = (expire_date - now).days
+                expire_str = expire_date.strftime("%Y-%m-%d %H:%M")
+            else:
+                days_remaining = "∞"
+                expire_str = "Без ограничений"
             
             info_text = f"""
-📊 Информация о ваших конфигах:
+📊 Информация о вашем конфиге:
 
-• Лимит конфигов: {limit}
-• Создано конфигов: {created}
-• Осталось создать: {remaining}
-• Всего конфигов в базе: {config_count}
+📧 Email: {email}
+🆔 Inbound ID: {inbound_id}
 
-💡 Используйте кнопку '✨ Создать клиента' для создания нового конфига.
+📈 Трафик:
+• Отправлено: {up_gb:.2f} GB
+• Получено: {down_gb:.2f} GB
+• Всего: {total_gb:.2f} GB
+
+⏰ Срок действия:
+• Осталось дней: {days_remaining}
+• Дата окончания: {expire_str}
 """
             
             await query.edit_message_text(info_text)
