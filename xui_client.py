@@ -116,6 +116,9 @@ class XUIClient:
             # Приоритет: сначала пробуем наиболее вероятные варианты
             # Важно: некоторые версии x-ui требуют POST с пустым телом или определенными параметрами
             url_methods = [
+                # Официальный endpoint согласно документации x-ui
+                (f"{self.base_url}/panel/api/inbounds/list", "GET"),
+                (f"{self.base_url}/panel/api/inbounds/list", "POST"),
                 # POST запросы (x-ui часто использует POST для API)
                 # Варианты без /list в конце
                 (f"{self.base_url}/panel/panel/inbounds", "POST"),
