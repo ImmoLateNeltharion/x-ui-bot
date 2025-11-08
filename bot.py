@@ -572,10 +572,10 @@ async def get_config(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if client and client.get("expireTime", 0) > 0:
             db.add_reminder(user_id, email, target_inbound_id, client.get("expireTime"))
         
+        # Не используем Markdown для конфигурации, так как она содержит специальные символы
         await update.message.reply_text(
             f"✅ Конфигурация для {email}:\n\n"
-            f"`{config}`",
-            parse_mode='Markdown'
+            f"{config}"
         )
         
         # Также отправляем как обычный текст для удобства копирования
