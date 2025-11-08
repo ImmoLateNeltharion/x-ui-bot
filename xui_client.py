@@ -105,18 +105,29 @@ class XUIClient:
             # Пробуем разные варианты URL и методов
             # x-ui может использовать разные пути и методы
             url_methods = [
-                # GET запросы
-                (f"{self.base_url}/xui/api/inbound/list", "GET"),
+                # GET запросы с /api/
+                (f"{self.base_url}/panel/api/inbounds/list", "GET"),  # С "s" в конце
                 (f"{self.base_url}/panel/api/inbound/list", "GET"),
+                (f"{self.base_url}/xui/api/inbounds/list", "GET"),
+                (f"{self.base_url}/xui/api/inbound/list", "GET"),
+                (f"{self.base_url}/api/inbounds/list", "GET"),
                 (f"{self.base_url}/api/inbound/list", "GET"),
-                (f"{self.base_url}/xui/inbound/list", "GET"),
+                # GET запросы без /api/
+                (f"{self.base_url}/panel/inbounds/list", "GET"),
                 (f"{self.base_url}/panel/inbound/list", "GET"),
+                (f"{self.base_url}/xui/inbounds/list", "GET"),
+                (f"{self.base_url}/xui/inbound/list", "GET"),
+                (f"{self.base_url}/inbounds/list", "GET"),
                 (f"{self.base_url}/inbound/list", "GET"),
-                # POST запросы
-                (f"{self.base_url}/xui/api/inbound/list", "POST"),
+                # POST запросы с /api/
+                (f"{self.base_url}/panel/api/inbounds/list", "POST"),
                 (f"{self.base_url}/panel/api/inbound/list", "POST"),
+                (f"{self.base_url}/xui/api/inbounds/list", "POST"),
+                (f"{self.base_url}/xui/api/inbound/list", "POST"),
+                (f"{self.base_url}/api/inbounds/list", "POST"),
                 (f"{self.base_url}/api/inbound/list", "POST"),
-                (f"{self.base_url}/xui/inbound/list", "POST"),
+                # POST запросы без /api/
+                (f"{self.base_url}/panel/inbounds/list", "POST"),
                 (f"{self.base_url}/panel/inbound/list", "POST"),
             ]
             
