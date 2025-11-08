@@ -480,12 +480,20 @@ class XUIClient:
             logger.error(f"Ошибка получения конфигов пользователя: {e}", exc_info=True)
             return []
     
-    def get_next_available_email(self, inbound_id: int, base_username: str) -> str:
+    def get_next_available_email(self, inbound_id: int, base_username: str, excluded_emails: Optional[List[str]] = None) -> str:
         """Получить следующий доступный email с итерирующимся номером для пользователя
         
         Если есть конфиги username, username_1, username_2, то вернет username_3
         Если нет конфигов, вернет username_1 (первый конфиг)
+        
+        Args:
+            inbound_id: ID inbound
+            base_username: Базовое имя пользователя
+            excluded_emails: Список email, которые нужно исключить из поиска (например, уже попробованные)
         """
+        if excluded_emails is None:
+            excluded_emails = []
+        
         try:
             self._ensure_authenticated()
         except Exception as e:
@@ -515,6 +523,21 @@ class XUIClient:
             
             for client in clients:
                 client_email = client.get("email", "")
+                # Исключаем email, которые были переданы в excluded_emails
+                if client_email in excluded_emails:
+                    # Если email в списке исключенных, считаем его занятым
+                    if client_email == base_username:
+                        has_base_email = True
+                        used_numbers.add(0)
+                    elif client_email.startswith(f"{base_username}_"):
+                        suffix = client_email[len(f"{base_username}_"):]
+                        try:
+                            number = int(suffix)
+                            used_numbers.add(number)
+                        except ValueError:
+                            pass
+                    continue
+                
                 if client_email == base_username:
                     has_base_email = True
                     used_numbers.add(0)  # Базовый email считаем как номер 0
@@ -540,7 +563,7 @@ class XUIClient:
                     next_number += 1
             
             next_email = f"{base_username}_{next_number}"
-            logger.info(f"Следующий доступный email для {base_username}: {next_email}")
+            logger.info(f"Следующий доступный email для {base_username}: {next_email} (исключено: {len(excluded_emails)} email)")
             return next_email
             
         except Exception as e:

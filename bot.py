@@ -1039,11 +1039,15 @@ async def _create_client_for_inbound(update: Update, context: ContextTypes.DEFAU
         max_attempts = 3
         success = False
         email = None
+        attempted_emails = []  # Список email, которые уже были попробованы
         
         for attempt in range(max_attempts):
-            # Получаем следующий доступный email
-            email = xui_client.get_next_available_email(inbound_id, username)
+            # Получаем следующий доступный email, исключая уже попробованные
+            email = xui_client.get_next_available_email(inbound_id, username, excluded_emails=attempted_emails)
             logger.info(f"Попытка {attempt + 1}/{max_attempts}: Используется email {email} для пользователя {username}")
+            
+            # Добавляем email в список попробованных
+            attempted_emails.append(email)
             
             # Пытаемся добавить клиента
             success = xui_client.add_client_to_inbound(inbound_id, email, expire_time=expire_time)
@@ -1053,9 +1057,9 @@ async def _create_client_for_inbound(update: Update, context: ContextTypes.DEFAU
                 break
             else:
                 logger.warning(f"⚠️ Попытка {attempt + 1} не удалась для email {email}, пробуем следующий...")
-                # Небольшая задержка перед следующей попыткой
+                # Увеличиваем задержку перед следующей попыткой, чтобы x-ui успел обновить данные
                 import asyncio
-                await asyncio.sleep(0.5)
+                await asyncio.sleep(1.5)  # Увеличено с 0.5 до 1.5 секунд
         
         if not success:
             error_msg = (
