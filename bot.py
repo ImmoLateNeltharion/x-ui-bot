@@ -1276,53 +1276,60 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
                 return
             
-            # Берем последний конфиг (с максимальным номером)
-            last_config = user_configs[-1]
-            email = last_config["email"]
-            
             # Получаем протокол из inbound
             inbounds = xui_client.get_inbounds()
             inbound = next((i for i in inbounds if i.get("id") == inbound_id), None)
             
-            if inbound:
-                protocol = inbound.get("protocol", "vless").lower()
+            if not inbound:
+                await query.edit_message_text("❌ Не удалось получить информацию о сервере.")
+                return
+            
+            protocol = inbound.get("protocol", "vless").lower()
+            
+            # Получаем все конфигурации для всех конфигов пользователя
+            configs_text = f"📥 Ваши конфигурации ({len(user_configs)} шт.):\n\n"
+            configs_found = 0
+            
+            for i, config_data in enumerate(user_configs, 1):
+                email = config_data["email"]
                 config = xui_client.get_client_config(inbound_id, email, protocol)
                 
                 if config:
+                    configs_found += 1
                     # Записываем выдачу конфига
                     db.record_issued_config(user_id, email, inbound_id)
                     
                     # Получаем информацию о клиенте для напоминаний
-                    client = last_config["client"]
+                    client = config_data["client"]
                     
                     if client and client.get("expireTime", 0) > 0:
                         db.add_reminder(user_id, email, inbound_id, client.get("expireTime"))
                     
-                    # Если у пользователя несколько конфигов, показываем информацию
-                    config_info = ""
-                    if len(user_configs) > 1:
-                        config_info = f"📋 У вас {len(user_configs)} конфигов. Показан последний ({email}):\n\n"
+                    # Добавляем конфигурацию в текст
+                    configs_text += f"📧 Конфиг #{i} ({email}):\n{config}\n\n"
+                    configs_text += "─" * 30 + "\n\n"
+            
+            if configs_found > 0:
+                # Отправляем все конфигурации одним сообщением
+                await query.edit_message_text(configs_text)
+                
+                # Также отправляем каждую конфигурацию отдельным сообщением для удобства копирования
+                for i, config_data in enumerate(user_configs, 1):
+                    email = config_data["email"]
+                    config = xui_client.get_client_config(inbound_id, email, protocol)
                     
-                    # Не используем Markdown для конфигурации, так как она содержит специальные символы
-                    await query.edit_message_text(
-                        f"{config_info}✅ Конфигурация для {email}:\n\n"
-                        f"{config}"
-                    )
-                    
-                    # Отправляем конфигурацию отдельным сообщением
-                    config_msg = await context.bot.send_message(
-                        chat_id=query.message.chat_id,
-                        text=config
-                    )
-                    # Сохраняем message_id для возможного удаления
-                    await save_bot_message_id(context, user_id, config_msg.message_id)
-                else:
-                    await query.edit_message_text(
-                        f"❌ Конфиг для {email} не найден.\n"
-                        "💡 Используйте кнопку '✨ Создать конфиг' для создания нового конфига."
-                    )
+                    if config:
+                        config_msg = await context.bot.send_message(
+                            chat_id=query.message.chat_id,
+                            text=f"📧 Конфиг #{i} ({email}):\n\n{config}"
+                        )
+                        # Сохраняем message_id для возможного удаления
+                        await save_bot_message_id(context, user_id, config_msg.message_id)
             else:
-                await query.edit_message_text("❌ Не удалось получить информацию о сервере.")
+                await query.edit_message_text(
+                    "❌ Не удалось получить конфигурации.\n"
+                    "💡 Используйте кнопку '✨ Создать конфиг' для создания нового конфига."
+                )
             return
         elif data == "config_info":
             await query.answer("Показываю информацию о конфиге...")
