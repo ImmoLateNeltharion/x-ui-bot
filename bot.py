@@ -651,12 +651,6 @@ async def create_client(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
             )
         
-        if not keyboard:
-            await loading_msg.edit_text(
-                "❌ Не удалось создать кнопки для выбора сервера."
-            )
-            return
-        
         if not keyboard or not any(keyboard):
             await loading_msg.edit_text(
                 "❌ Не удалось создать кнопки для выбора сервера."
