@@ -422,6 +422,131 @@ class XUIClient:
         
         return config
     
+    def get_user_configs(self, inbound_id: int, base_username: str) -> List[Dict[str, Any]]:
+        """Получить список всех конфигов пользователя (username, username_1, username_2, ...)"""
+        try:
+            self._ensure_authenticated()
+        except Exception as e:
+            logger.error(f"Ошибка авторизации: {e}")
+            return []
+        
+        try:
+            # Получаем список inbounds
+            inbounds = self.get_inbounds()
+            inbound = next((i for i in inbounds if i.get("id") == inbound_id), None)
+            
+            if not inbound:
+                logger.warning(f"Inbound {inbound_id} не найден")
+                return []
+            
+            # Парсим settings
+            settings_str = inbound.get("settings", "{}")
+            settings = json.loads(settings_str) if settings_str else {}
+            
+            # Получаем существующих клиентов
+            clients = settings.get("clients", [])
+            
+            # Находим все конфиги пользователя
+            user_configs = []
+            for client in clients:
+                client_email = client.get("email", "")
+                if client_email == base_username:
+                    # Базовый email без номера
+                    user_configs.append({
+                        "email": client_email,
+                        "number": 0,
+                        "client": client
+                    })
+                elif client_email.startswith(f"{base_username}_"):
+                    # Email с номером (username_N)
+                    suffix = client_email[len(f"{base_username}_"):]
+                    try:
+                        number = int(suffix)
+                        user_configs.append({
+                            "email": client_email,
+                            "number": number,
+                            "client": client
+                        })
+                    except ValueError:
+                        # Если не число, игнорируем
+                        pass
+            
+            # Сортируем по номеру
+            user_configs.sort(key=lambda x: x["number"])
+            logger.info(f"Найдено конфигов для {base_username}: {len(user_configs)}")
+            return user_configs
+            
+        except Exception as e:
+            logger.error(f"Ошибка получения конфигов пользователя: {e}", exc_info=True)
+            return []
+    
+    def get_next_available_email(self, inbound_id: int, base_username: str) -> str:
+        """Получить следующий доступный email с итерирующимся номером для пользователя
+        
+        Если есть конфиги username, username_1, username_2, то вернет username_3
+        Если нет конфигов, вернет username_1 (первый конфиг)
+        """
+        try:
+            self._ensure_authenticated()
+        except Exception as e:
+            logger.error(f"Ошибка авторизации: {e}")
+            return f"{base_username}_1"  # Возвращаем дефолт при ошибке
+        
+        try:
+            # Получаем список inbounds
+            inbounds = self.get_inbounds()
+            inbound = next((i for i in inbounds if i.get("id") == inbound_id), None)
+            
+            if not inbound:
+                logger.warning(f"Inbound {inbound_id} не найден, используем дефолтный email")
+                return f"{base_username}_1"
+            
+            # Парсим settings
+            settings_str = inbound.get("settings", "{}")
+            settings = json.loads(settings_str) if settings_str else {}
+            
+            # Получаем существующих клиентов
+            clients = settings.get("clients", [])
+            
+            # Находим все email, которые начинаются с base_username
+            # Проверяем точное совпадение (username) и с номерами (username_1, username_2, ...)
+            used_numbers = set()
+            has_base_email = False
+            
+            for client in clients:
+                client_email = client.get("email", "")
+                if client_email == base_username:
+                    has_base_email = True
+                    used_numbers.add(0)  # Базовый email считаем как номер 0
+                elif client_email.startswith(f"{base_username}_"):
+                    # Извлекаем номер из email вида username_N
+                    suffix = client_email[len(f"{base_username}_"):]
+                    try:
+                        number = int(suffix)
+                        used_numbers.add(number)
+                    except ValueError:
+                        # Если не число, игнорируем
+                        pass
+            
+            # Находим следующий доступный номер
+            if not has_base_email and 0 not in used_numbers:
+                # Если базового email нет, используем его (но пользователь хочет с номерами, так что начинаем с 1)
+                # Но для совместимости, если есть старые конфиги без номера, пропускаем их
+                next_number = 1
+            else:
+                # Ищем минимальный свободный номер, начиная с 1
+                next_number = 1
+                while next_number in used_numbers:
+                    next_number += 1
+            
+            next_email = f"{base_username}_{next_number}"
+            logger.info(f"Следующий доступный email для {base_username}: {next_email}")
+            return next_email
+            
+        except Exception as e:
+            logger.error(f"Ошибка определения следующего email: {e}", exc_info=True)
+            return f"{base_username}_1"  # Возвращаем дефолт при ошибке
+    
     def get_client_config_by_email(self, email: str, inbound_id: Optional[int] = None) -> Optional[str]:
         """Получить конфигурацию клиента по email"""
         try:

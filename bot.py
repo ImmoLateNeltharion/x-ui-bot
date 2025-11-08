@@ -1003,8 +1003,17 @@ async def _create_client_for_inbound(update: Update, context: ContextTypes.DEFAU
         else:
             await update.message.reply_text("⏳ Создаю конфиг...")
         
-        # Используем username как email клиента
-        email = username
+        # Получаем следующий доступный email с номером (username_1, username_2, и т.д.)
+        if not username:
+            error_msg = "❌ У вас не установлен username в настройках Telegram."
+            if hasattr(update, 'callback_query'):
+                await update.callback_query.edit_message_text(error_msg)
+            else:
+                await update.message.reply_text(error_msg)
+            return
+        
+        email = xui_client.get_next_available_email(inbound_id, username)
+        logger.info(f"Используется email с номером: {email} для пользователя {username}")
         
         # Вычисляем expire_time в миллисекундах (31 день)
         from datetime import datetime, timedelta
@@ -1170,11 +1179,23 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
                 return
             
-            # Получаем конфиг по username (email = username)
-            email = username
             inbound_id = DEFAULT_INBOUND_ID
             
             await query.edit_message_text("⏳ Получаю конфигурацию...")
+            
+            # Получаем все конфиги пользователя
+            user_configs = xui_client.get_user_configs(inbound_id, username)
+            
+            if not user_configs:
+                await query.edit_message_text(
+                    "❌ У вас нет созданных конфигов.\n"
+                    "💡 Используйте кнопку '✨ Создать конфиг' для создания нового конфига."
+                )
+                return
+            
+            # Берем последний конфиг (с максимальным номером)
+            last_config = user_configs[-1]
+            email = last_config["email"]
             
             # Получаем протокол из inbound
             inbounds = xui_client.get_inbounds()
@@ -1189,15 +1210,19 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     db.record_issued_config(user_id, email, inbound_id)
                     
                     # Получаем информацию о клиенте для напоминаний
-                    clients = xui_client.get_inbound_clients(inbound_id)
-                    client = next((c for c in clients if c.get("email") == email), None)
+                    client = last_config["client"]
                     
                     if client and client.get("expireTime", 0) > 0:
                         db.add_reminder(user_id, email, inbound_id, client.get("expireTime"))
                     
+                    # Если у пользователя несколько конфигов, показываем информацию
+                    config_info = ""
+                    if len(user_configs) > 1:
+                        config_info = f"📋 У вас {len(user_configs)} конфигов. Показан последний ({email}):\n\n"
+                    
                     # Не используем Markdown для конфигурации, так как она содержит специальные символы
                     await query.edit_message_text(
-                        f"✅ Конфигурация для {email}:\n\n"
+                        f"{config_info}✅ Конфигурация для {email}:\n\n"
                         f"{config}"
                     )
                     
@@ -1227,57 +1252,54 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
                 return
             
-            email = username
             inbound_id = DEFAULT_INBOUND_ID
             
-            # Получаем информацию о клиенте из x-ui
-            clients = xui_client.get_inbound_clients(inbound_id)
-            client = next((c for c in clients if c.get("email") == email), None)
+            # Получаем все конфиги пользователя
+            user_configs = xui_client.get_user_configs(inbound_id, username)
             
-            if not client:
+            if not user_configs:
                 await query.edit_message_text(
-                    f"❌ Конфиг для {email} не найден.\n"
+                    "❌ У вас нет созданных конфигов.\n"
                     "💡 Используйте кнопку '✨ Создать конфиг' для создания нового конфига."
                 )
                 return
             
-            # Получаем данные о трафике
-            total_traffic = client.get("total", 0)  # в байтах
-            up_traffic = client.get("up", 0)  # в байтах
-            down_traffic = client.get("down", 0)  # в байтах
+            # Формируем информацию о всех конфигах
+            from datetime import datetime
             
-            # Конвертируем в GB
-            total_gb = total_traffic / (1024 ** 3)
-            up_gb = up_traffic / (1024 ** 3)
-            down_gb = down_traffic / (1024 ** 3)
+            info_text = f"📊 Информация о ваших конфигах:\n\n"
+            info_text += f"📋 Всего конфигов: {len(user_configs)}\n\n"
             
-            # Получаем информацию о сроке действия
-            expire_time = client.get("expireTime", 0)
-            if expire_time > 0:
-                from datetime import datetime
-                expire_date = datetime.fromtimestamp(expire_time / 1000)
-                now = datetime.now()
-                days_remaining = (expire_date - now).days
-                expire_str = expire_date.strftime("%Y-%m-%d %H:%M")
-            else:
-                days_remaining = "∞"
-                expire_str = "Без ограничений"
-            
-            info_text = f"""
-📊 Информация о вашем конфиге:
-
-📧 Email: {email}
-🆔 Inbound ID: {inbound_id}
-
-📈 Трафик:
-• Отправлено: {up_gb:.2f} GB
-• Получено: {down_gb:.2f} GB
-• Всего: {total_gb:.2f} GB
-
-⏰ Срок действия:
-• Осталось дней: {days_remaining}
-• Дата окончания: {expire_str}
-"""
+            for i, config_data in enumerate(user_configs, 1):
+                email = config_data["email"]
+                client = config_data["client"]
+                
+                # Получаем данные о трафике
+                total_traffic = client.get("total", 0)  # в байтах
+                up_traffic = client.get("up", 0)  # в байтах
+                down_traffic = client.get("down", 0)  # в байтах
+                
+                # Конвертируем в GB
+                total_gb = total_traffic / (1024 ** 3)
+                up_gb = up_traffic / (1024 ** 3)
+                down_gb = down_traffic / (1024 ** 3)
+                
+                # Получаем информацию о сроке действия
+                expire_time = client.get("expireTime", 0)
+                if expire_time > 0:
+                    expire_date = datetime.fromtimestamp(expire_time / 1000)
+                    now = datetime.now()
+                    days_remaining = (expire_date - now).days
+                    expire_str = expire_date.strftime("%Y-%m-%d %H:%M")
+                else:
+                    days_remaining = "∞"
+                    expire_str = "Без ограничений"
+                
+                info_text += f"━━━━━━━━━━━━━━━━━━━━\n"
+                info_text += f"📧 Конфиг #{i}: {email}\n"
+                info_text += f"📈 Трафик: {total_gb:.2f} GB (↑{up_gb:.2f} ↓{down_gb:.2f})\n"
+                info_text += f"⏰ Осталось дней: {days_remaining}\n"
+                info_text += f"📅 До: {expire_str}\n\n"
             
             await query.edit_message_text(info_text)
             return
