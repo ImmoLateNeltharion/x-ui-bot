@@ -635,4 +635,119 @@ class XUIClient:
         except Exception as e:
             logger.error(f"Ошибка добавления клиента: {e}", exc_info=True)
             return False
+    
+    def update_client_expiry(self, inbound_id: int, email: str, add_days: int = 31) -> bool:
+        """Обновить срок действия клиента (продлить на указанное количество дней)"""
+        try:
+            self._ensure_authenticated()
+        except Exception as e:
+            logger.error(f"Ошибка авторизации: {e}")
+            return False
+        
+        try:
+            logger.info(f"Продление конфига для {email} на {add_days} дней в inbound {inbound_id}")
+            
+            # Получаем список inbounds
+            inbounds = self.get_inbounds()
+            inbound = next((i for i in inbounds if i.get("id") == inbound_id), None)
+            
+            if not inbound:
+                logger.error(f"Inbound {inbound_id} не найден в списке")
+                return False
+            
+            # Парсим settings
+            settings_str = inbound.get("settings", "{}")
+            settings = json.loads(settings_str) if settings_str else {}
+            
+            # Получаем существующих клиентов
+            clients = settings.get("clients", [])
+            
+            # Находим клиента по email
+            client = next((c for c in clients if c.get("email") == email), None)
+            
+            if not client:
+                logger.error(f"Клиент с email {email} не найден в inbound {inbound_id}")
+                return False
+            
+            # Вычисляем новый срок действия
+            import time
+            current_time = int(time.time() * 1000)  # Текущее время в миллисекундах
+            current_expiry = client.get("expiryTime", 0)
+            
+            # Если срок действия уже истек или не установлен, устанавливаем с текущего момента
+            if current_expiry == 0 or current_expiry < current_time:
+                new_expiry = current_time + (add_days * 24 * 60 * 60 * 1000)
+            else:
+                # Продлеваем существующий срок
+                new_expiry = current_expiry + (add_days * 24 * 60 * 60 * 1000)
+            
+            # Обновляем expireTime клиента
+            client["expiryTime"] = new_expiry
+            
+            # Обновляем settings
+            settings["clients"] = clients
+            updated_settings = json.dumps(settings, indent=2)
+            
+            # Подготавливаем данные для обновления inbound
+            update_data = {
+                "id": inbound_id,
+                "up": inbound.get("up", 0),
+                "down": inbound.get("down", 0),
+                "total": inbound.get("total", 0),
+                "remark": inbound.get("remark", ""),
+                "enable": inbound.get("enable", True),
+                "expiryTime": inbound.get("expiryTime", 0),
+                "listen": inbound.get("listen", ""),
+                "port": inbound.get("port", 0),
+                "protocol": inbound.get("protocol", "vless"),
+                "settings": updated_settings,
+                "streamSettings": inbound.get("streamSettings", "{}"),
+                "sniffing": inbound.get("sniffing", "{}"),
+                "tag": inbound.get("tag", "")
+            }
+            
+            # Обновляем inbound - пробуем разные варианты URL для 3x-ui
+            update_urls_to_try = [
+                f"{self.base_url}/panel/api/inbound/update/{inbound_id}",
+                f"{self.base_url}/panel/panel/api/inbound/update/{inbound_id}",
+                f"{self.base_url}/panel/panel/inbound/update/{inbound_id}",
+                f"{self.base_url}/panel/inbound/update/{inbound_id}",
+            ]
+            
+            for test_url in update_urls_to_try:
+                logger.info(f"Попытка обновления клиента через {test_url}")
+                try:
+                    test_response = self.session.post(
+                        test_url,
+                        json=update_data,
+                        headers={
+                            "Accept": "application/json",
+                            "Content-Type": "application/json"
+                        },
+                        timeout=10
+                    )
+                    logger.info(f"Ответ обновления клиента: статус {test_response.status_code}")
+                    
+                    if test_response.status_code == 200:
+                        try:
+                            result = test_response.json()
+                            if result.get("success"):
+                                from datetime import datetime
+                                new_expiry_date = datetime.fromtimestamp(new_expiry / 1000)
+                                logger.info(f"✅ Срок действия конфига для {email} продлен до {new_expiry_date.strftime('%Y-%m-%d %H:%M')}")
+                                return True
+                            else:
+                                logger.warning(f"API вернул success=False для {test_url}: {result.get('msg', 'Unknown error')}")
+                        except json.JSONDecodeError as e:
+                            logger.warning(f"Ошибка парсинга JSON для {test_url}: {e}")
+                    else:
+                        logger.warning(f"HTTP ошибка для {test_url}: {test_response.status_code}, текст: {test_response.text[:200]}")
+                except Exception as e:
+                    logger.warning(f"Ошибка при запросе {test_url}: {e}")
+            
+            logger.error("Все варианты URL для обновления клиента не сработали")
+            return False
+        except Exception as e:
+            logger.error(f"Ошибка обновления срока действия клиента: {e}", exc_info=True)
+            return False
 

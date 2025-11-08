@@ -353,6 +353,10 @@ async def admin_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /setlimit <username> <limit> - Изменить лимит конфигов для пользователя
 Пример: /setlimit @username 10
 
+/extend <username> [days] - Продлить срок действия конфига на указанное количество дней
+Пример: /extend @username 31
+💡 Если days не указан, по умолчанию продлевается на 31 день
+
 /users - Показать список всех пользователей
 
 /sync_reminders - Синхронизировать напоминания из x-ui
@@ -543,6 +547,102 @@ async def clear_database_command(update: Update, context: ContextTypes.DEFAULT_T
     except Exception as e:
         logger.error(f"Ошибка при очистке базы данных: {e}", exc_info=True)
         await update.message.reply_text(f"❌ Ошибка при очистке базы данных: {str(e)}")
+
+
+async def extend_config_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Продлить срок действия конфига на +31 день (админ)"""
+    username = update.effective_user.username
+    
+    if not is_admin(username):
+        await update.message.reply_text("❌ У вас нет прав администратора.")
+        return
+    
+    if len(context.args) < 1:
+        await update.message.reply_text(
+            "❌ Использование: /extend <username> [days]\n"
+            "Пример: /extend @username 31\n"
+            "💡 Если days не указан, по умолчанию продлевается на 31 день."
+        )
+        return
+    
+    try:
+        target_username = context.args[0].lstrip('@')
+        add_days = int(context.args[1]) if len(context.args) > 1 else 31
+        
+        # Получаем пользователя из базы
+        user = db.get_user_by_username(target_username)
+        if not user:
+            await update.message.reply_text(
+                f"❌ Пользователь @{target_username} не найден в базе.\n"
+                "💡 Пользователь должен сначала создать конфиг через бота."
+            )
+            return
+        
+        # Получаем email пользователя (username = email)
+        email = target_username
+        inbound_id = DEFAULT_INBOUND_ID
+        
+        # Проверяем, существует ли конфиг для этого пользователя
+        clients = xui_client.get_inbound_clients(inbound_id)
+        client = next((c for c in clients if c.get("email") == email), None)
+        
+        if not client:
+            await update.message.reply_text(
+                f"❌ Конфиг для @{target_username} не найден в x-ui.\n"
+                "💡 Пользователь должен сначала создать конфиг через бота."
+            )
+            return
+        
+        # Получаем текущий срок действия
+        current_expiry = client.get("expireTime", 0)
+        from datetime import datetime
+        if current_expiry > 0:
+            current_expiry_date = datetime.fromtimestamp(current_expiry / 1000)
+            current_expiry_str = current_expiry_date.strftime("%Y-%m-%d %H:%M")
+        else:
+            current_expiry_str = "Без ограничений"
+        
+        # Продлеваем конфиг
+        await update.message.reply_text(f"⏳ Продлеваю конфиг для @{target_username} на {add_days} дней...")
+        
+        success = xui_client.update_client_expiry(inbound_id, email, add_days)
+        
+        if success:
+            # Получаем новый срок действия
+            clients = xui_client.get_inbound_clients(inbound_id)
+            client = next((c for c in clients if c.get("email") == email), None)
+            
+            if client:
+                new_expiry = client.get("expireTime", 0)
+                if new_expiry > 0:
+                    new_expiry_date = datetime.fromtimestamp(new_expiry / 1000)
+                    new_expiry_str = new_expiry_date.strftime("%Y-%m-%d %H:%M")
+                else:
+                    new_expiry_str = "Без ограничений"
+            else:
+                new_expiry_str = "Не удалось получить"
+            
+            result_text = f"""
+✅ Конфиг для @{target_username} успешно продлен!
+
+📅 Текущий срок действия: {current_expiry_str}
+📅 Новый срок действия: {new_expiry_str}
+➕ Продлено на: {add_days} дней
+
+💡 Конфиг не был удален и не требует перевыпуска.
+"""
+            await update.message.reply_text(result_text)
+        else:
+            await update.message.reply_text(
+                f"❌ Не удалось продлить конфиг для @{target_username}.\n"
+                "💡 Проверьте логи для получения подробной информации."
+            )
+            
+    except ValueError:
+        await update.message.reply_text("❌ Количество дней должно быть числом.")
+    except Exception as e:
+        logger.error(f"Ошибка в extend_config_command: {e}", exc_info=True)
+        await update.message.reply_text(f"❌ Ошибка: {str(e)}")
 
 
 async def sync_reminders_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1477,6 +1577,7 @@ def main():
     application.add_handler(CommandHandler("adminhelp", admin_help))
     application.add_handler(CommandHandler("adduser", add_user_command))
     application.add_handler(CommandHandler("setlimit", set_limit_command))
+    application.add_handler(CommandHandler("extend", extend_config_command))
     application.add_handler(CommandHandler("users", list_users_command))
     application.add_handler(CommandHandler("cleardb", clear_database_command))
     application.add_handler(CommandHandler("sync_reminders", sync_reminders_command))
