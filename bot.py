@@ -82,7 +82,23 @@ def is_admin(username: Optional[str]) -> bool:
     return False
 
 
-async def send_app_links(context: ContextTypes.DEFAULT_TYPE, chat_id: int):
+async def save_bot_message_id(context: ContextTypes.DEFAULT_TYPE, user_id: int, message_id: int):
+    """Сохранить message_id сообщения бота для возможного удаления"""
+    try:
+        if not hasattr(context, 'bot_data'):
+            context.bot_data = {}
+        bot_messages_key = f"bot_messages_{user_id}"
+        if bot_messages_key not in context.bot_data:
+            context.bot_data[bot_messages_key] = []
+        context.bot_data[bot_messages_key].append(message_id)
+        # Ограничиваем список последними 50 сообщениями, чтобы не накапливать слишком много
+        if len(context.bot_data[bot_messages_key]) > 50:
+            context.bot_data[bot_messages_key] = context.bot_data[bot_messages_key][-50:]
+    except Exception as e:
+        logger.debug(f"Не удалось сохранить message_id сообщения: {e}")
+
+
+async def send_app_links(context: ContextTypes.DEFAULT_TYPE, chat_id: int, user_id: int = None):
     """Отправить ссылки на приложения для iOS и Android"""
     app_links_text = """
 📱 Приложения для подключения:
@@ -92,19 +108,22 @@ async def send_app_links(context: ContextTypes.DEFAULT_TYPE, chat_id: int):
 • Shadowrocket: https://apps.apple.com/app/shadowrocket/id932747118
 
 🤖 Android (Google Play):
-• v2rayNG: https://play.google.com/store/apps/details?id=com.v2ray.ang
+• v2RayTun: https://play.google.com/store/apps/details?id=com.v2raytun.android
 • v2rayNG (GitHub): https://github.com/2dust/v2rayNG/releases
 
-💡 Рекомендуется использовать v2rayNG для Android и iOS.
+💡 Рекомендуется использовать v2RayTun для Android и v2rayNG для iOS.
 """
     
     try:
-        await context.bot.send_message(
+        msg = await context.bot.send_message(
             chat_id=chat_id,
             text=app_links_text,
             parse_mode='HTML',
             disable_web_page_preview=False
         )
+        # Сохраняем message_id для возможного удаления
+        if user_id:
+            await save_bot_message_id(context, user_id, msg.message_id)
     except Exception as e:
         logger.error(f"Ошибка при отправке ссылок на приложения: {e}")
 
@@ -191,45 +210,49 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     reply_markup = ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True)
     
-    # Пытаемся удалить предыдущие сообщения меню, если они есть
+    # Удаляем само сообщение с командой /start сразу
+    try:
+        await update.message.delete()
+    except Exception as e:
+        logger.debug(f"Не удалось удалить сообщение с командой /start: {e}")
+    
+    # Пытаемся удалить все предыдущие сообщения бота
     try:
         if hasattr(context, 'bot_data') and context.bot_data:
-            # Удаляем предыдущее сообщение с меню
-            last_menu_msg_id = context.bot_data.get(f"last_menu_msg_{user_id}")
-            if last_menu_msg_id:
-                try:
-                    await context.bot.delete_message(
-                        chat_id=update.message.chat_id,
-                        message_id=last_menu_msg_id
-                    )
-                except Exception as e:
-                    logger.debug(f"Не удалось удалить предыдущее сообщение меню: {e}")
+            # Получаем список всех сохраненных message_id сообщений бота для этого пользователя
+            bot_messages_key = f"bot_messages_{user_id}"
+            bot_messages = context.bot_data.get(bot_messages_key, [])
             
-            # Удаляем предыдущее inline сообщение
-            last_inline_msg_id = context.bot_data.get(f"last_inline_msg_{user_id}")
-            if last_inline_msg_id:
+            # Удаляем все сохраненные сообщения бота
+            for msg_id in bot_messages:
                 try:
                     await context.bot.delete_message(
                         chat_id=update.message.chat_id,
-                        message_id=last_inline_msg_id
+                        message_id=msg_id
                     )
                 except Exception as e:
-                    logger.debug(f"Не удалось удалить предыдущее inline сообщение: {e}")
+                    logger.debug(f"Не удалось удалить сообщение {msg_id}: {e}")
+            
+            # Очищаем список сообщений
+            context.bot_data[bot_messages_key] = []
     except Exception as e:
         logger.debug(f"Ошибка при попытке удалить предыдущие сообщения: {e}")
     
     # Отправляем новое сообщение с меню
-    menu_msg = await update.message.reply_text(welcome_text, reply_markup=reply_markup)
-    inline_msg = await update.message.reply_text("💡 Используйте кнопки выше для работы с ботом.", reply_markup=inline_markup)
+    menu_msg = await context.bot.send_message(
+        chat_id=update.message.chat_id,
+        text=welcome_text,
+        reply_markup=reply_markup
+    )
+    inline_msg = await context.bot.send_message(
+        chat_id=update.message.chat_id,
+        text="💡 Используйте кнопки выше для работы с ботом.",
+        reply_markup=inline_markup
+    )
     
-    # Сохраняем message_id последнего сообщения меню для возможного удаления
-    try:
-        if not hasattr(context, 'bot_data'):
-            context.bot_data = {}
-        context.bot_data[f"last_menu_msg_{user_id}"] = menu_msg.message_id
-        context.bot_data[f"last_inline_msg_{user_id}"] = inline_msg.message_id
-    except Exception as e:
-        logger.debug(f"Не удалось сохранить message_id меню: {e}")
+    # Сохраняем message_id новых сообщений для возможного удаления
+    await save_bot_message_id(context, user_id, menu_msg.message_id)
+    await save_bot_message_id(context, user_id, inline_msg.message_id)
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -928,10 +951,14 @@ async def _create_client_for_inbound(update: Update, context: ContextTypes.DEFAU
             chat_id = update.callback_query.message.chat_id
             await update.callback_query.edit_message_text(result_text)
             # Отправляем конфигурацию отдельным сообщением
-            await context.bot.send_message(chat_id=chat_id, text=config)
+            config_msg = await context.bot.send_message(chat_id=chat_id, text=config)
+            # Сохраняем message_id для возможного удаления
+            await save_bot_message_id(context, user_id, config_msg.message_id)
         else:
             await update.message.reply_text(result_text)
-            await update.message.reply_text(config)
+            config_msg = await update.message.reply_text(config)
+            # Сохраняем message_id для возможного удаления
+            await save_bot_message_id(context, user_id, config_msg.message_id)
         
         # Обновляем информацию о лимите
         user = db.get_user(user_id)
@@ -1061,10 +1088,12 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     )
                     
                     # Отправляем конфигурацию отдельным сообщением
-                    await context.bot.send_message(
+                    config_msg = await context.bot.send_message(
                         chat_id=query.message.chat_id,
                         text=config
                     )
+                    # Сохраняем message_id для возможного удаления
+                    await save_bot_message_id(context, user_id, config_msg.message_id)
                 else:
                     await query.edit_message_text(
                         f"❌ Конфиг для {email} не найден.\n"
@@ -1169,11 +1198,13 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
                 if os.path.exists(video_path):
                     with open(video_path, 'rb') as video_file:
-                        await context.bot.send_video(
+                        video_msg = await context.bot.send_video(
                             chat_id=query.message.chat_id,
                             video=video_file,
                             caption="📹 Видео инструкция по использованию бота"
                         )
+                        # Сохраняем message_id для возможного удаления
+                        await save_bot_message_id(context, user_id, video_msg.message_id)
                     logger.info(f"Видео инструкция отправлена из файла: {video_path}")
                 else:
                     logger.warning(f"Файл видео инструкции не найден: {video_path}")
@@ -1181,11 +1212,13 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     try:
                         from config import INSTRUCTION_VIDEO_FILE_ID
                         if INSTRUCTION_VIDEO_FILE_ID:
-                            await context.bot.send_video(
+                            video_msg = await context.bot.send_video(
                                 chat_id=query.message.chat_id,
                                 video=INSTRUCTION_VIDEO_FILE_ID,
                                 caption="📹 Видео инструкция по использованию бота"
                             )
+                            # Сохраняем message_id для возможного удаления
+                            await save_bot_message_id(context, user_id, video_msg.message_id)
                     except ImportError:
                         pass
             except Exception as e:
@@ -1194,16 +1227,18 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 try:
                     from config import INSTRUCTION_VIDEO_FILE_ID
                     if INSTRUCTION_VIDEO_FILE_ID:
-                        await context.bot.send_video(
+                        video_msg = await context.bot.send_video(
                             chat_id=query.message.chat_id,
                             video=INSTRUCTION_VIDEO_FILE_ID,
                             caption="📹 Видео инструкция по использованию бота"
                         )
+                        # Сохраняем message_id для возможного удаления
+                        await save_bot_message_id(context, user_id, video_msg.message_id)
                 except ImportError:
                     pass
             
             # Отправляем ссылки на приложения
-            await send_app_links(context, query.message.chat_id)
+            await send_app_links(context, query.message.chat_id, user_id)
             
             return
         elif data == "contact_admin":
