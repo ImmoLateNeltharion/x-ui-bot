@@ -559,37 +559,55 @@ async def extend_config_command(update: Update, context: ContextTypes.DEFAULT_TY
     
     if len(context.args) < 1:
         await update.message.reply_text(
-            "❌ Использование: /extend <username> [days]\n"
+            "❌ Использование: /extend <username или email> [days]\n"
             "Пример: /extend @username 31\n"
-            "💡 Если days не указан, по умолчанию продлевается на 31 день."
+            "Пример: /extend username_1 31\n"
+            "💡 Если days не указан, по умолчанию продлевается на 31 день.\n"
+            "💡 Можно указать username или email с номером (например, username_1)."
         )
         return
     
     try:
-        target_username = context.args[0].lstrip('@')
+        target_input = context.args[0].lstrip('@')
         add_days = int(context.args[1]) if len(context.args) > 1 else 31
         
-        # Получаем пользователя из базы
-        user = db.get_user_by_username(target_username)
-        if not user:
-            await update.message.reply_text(
-                f"❌ Пользователь @{target_username} не найден в базе.\n"
-                "💡 Пользователь должен сначала создать конфиг через бота."
-            )
-            return
-        
-        # Получаем email пользователя (username = email)
-        email = target_username
         inbound_id = DEFAULT_INBOUND_ID
         
-        # Проверяем, существует ли конфиг для этого пользователя
+        # Определяем, что передано: username или email с номером
+        # Если содержит _ и число в конце (например, username_1), это email
+        import re
+        email_pattern = re.compile(r'^(.+)_(\d+)$')
+        match = email_pattern.match(target_input)
+        
+        email = None
+        if match:
+            # Это email с номером (например, iccceee_boy_1)
+            email = target_input
+            logger.info(f"Используется email с номером: {email}")
+        else:
+            # Это username, нужно найти конфиги пользователя
+            user_configs = xui_client.get_user_configs(inbound_id, target_input)
+            if not user_configs:
+                await update.message.reply_text(
+                    f"❌ Конфиги для @{target_input} не найдены в x-ui.\n"
+                    "💡 Пользователь должен сначала создать конфиг через бота.\n"
+                    "💡 Или укажите email с номером (например, username_1)."
+                )
+                return
+            
+            # Используем последний конфиг (с максимальным номером)
+            last_config = user_configs[-1]
+            email = last_config["email"]
+            logger.info(f"Найден последний конфиг для {target_input}: {email}")
+        
+        # Проверяем, существует ли конфиг для этого email
         clients = xui_client.get_inbound_clients(inbound_id)
         client = next((c for c in clients if c.get("email") == email), None)
         
         if not client:
             await update.message.reply_text(
-                f"❌ Конфиг для @{target_username} не найден в x-ui.\n"
-                "💡 Пользователь должен сначала создать конфиг через бота."
+                f"❌ Конфиг для {email} не найден в x-ui.\n"
+                "💡 Проверьте правильность email."
             )
             return
         
@@ -603,7 +621,7 @@ async def extend_config_command(update: Update, context: ContextTypes.DEFAULT_TY
             current_expiry_str = "Без ограничений"
         
         # Продлеваем конфиг
-        await update.message.reply_text(f"⏳ Продлеваю конфиг для @{target_username} на {add_days} дней...")
+        await update.message.reply_text(f"⏳ Продлеваю конфиг для {email} на {add_days} дней...")
         
         success = xui_client.update_client_expiry(inbound_id, email, add_days)
         
@@ -623,7 +641,7 @@ async def extend_config_command(update: Update, context: ContextTypes.DEFAULT_TY
                 new_expiry_str = "Не удалось получить"
             
             result_text = f"""
-✅ Конфиг для @{target_username} успешно продлен!
+✅ Конфиг для {email} успешно продлен!
 
 📅 Текущий срок действия: {current_expiry_str}
 📅 Новый срок действия: {new_expiry_str}
@@ -634,7 +652,7 @@ async def extend_config_command(update: Update, context: ContextTypes.DEFAULT_TY
             await update.message.reply_text(result_text)
         else:
             await update.message.reply_text(
-                f"❌ Не удалось продлить конфиг для @{target_username}.\n"
+                f"❌ Не удалось продлить конфиг для {email}.\n"
                 "💡 Проверьте логи для получения подробной информации."
             )
             
