@@ -5,7 +5,7 @@ import logging
 import asyncio
 from datetime import datetime, timedelta
 from typing import Optional
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, Message, Chat, User
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -111,12 +111,16 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Добавляем кнопки для быстрого доступа
     keyboard = [
         [
-            InlineKeyboardButton("✨ Создать клиента", callback_data="create_menu"),
-            InlineKeyboardButton("📋 Список серверов", callback_data="list_menu")
+            InlineKeyboardButton("✨ Создать клиента", callback_data="create_menu")
         ],
         [
-            InlineKeyboardButton("📊 Моя информация", callback_data="myinfo_menu"),
-            InlineKeyboardButton("❓ Помощь", callback_data="help_menu")
+            InlineKeyboardButton("📥 Получить свой конфиг", callback_data="get_my_config")
+        ],
+        [
+            InlineKeyboardButton("📊 Информация о конфиге", callback_data="config_info")
+        ],
+        [
+            InlineKeyboardButton("💬 Связь с администратором", callback_data="contact_admin")
         ]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -808,7 +812,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if data == "create_menu":
             await query.answer("Открываю меню создания клиента...")
             # Создаем фейковое сообщение для вызова create_client
-            from telegram import Message, Chat, User
             fake_message = Message(
                 message_id=query.message.message_id,
                 date=query.message.date,
@@ -818,38 +821,88 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             fake_update = Update(update_id=update.update_id, message=fake_message)
             await create_client(fake_update, context)
             return
-        elif data == "list_menu":
-            await query.answer("Открываю список серверов...")
-            fake_message = Message(
-                message_id=query.message.message_id,
-                date=query.message.date,
-                chat=query.message.chat,
-                from_user=query.from_user
-            )
-            fake_update = Update(update_id=update.update_id, message=fake_message)
-            await list_inbounds(fake_update, context)
+        elif data == "get_my_config":
+            await query.answer("Получаю ваш конфиг...")
+            # Получаем конфиги пользователя
+            user_configs = db.get_user_configs(user_id)
+            if not user_configs:
+                await query.edit_message_text(
+                    "❌ У вас нет созданных конфигов.\n"
+                    "Используйте кнопку '✨ Создать клиента' для создания нового конфига."
+                )
+                return
+            
+            text = "📋 Ваши конфиги:\n\n"
+            keyboard = []
+            
+            for config in user_configs:
+                email = config.get("email", "N/A")
+                inbound_id = config.get("inbound_id", 0)
+                text += f"📧 Email: {email}\n"
+                text += f"🆔 Inbound ID: {inbound_id}\n"
+                text += "─" * 20 + "\n\n"
+                
+                keyboard.append([
+                    InlineKeyboardButton(
+                        f"📥 Получить {email}",
+                        callback_data=f"get_{inbound_id}_{email}"
+                    )
+                ])
+            
+            if keyboard:
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                await query.edit_message_text(text, reply_markup=reply_markup)
+            else:
+                await query.edit_message_text(text)
             return
-        elif data == "myinfo_menu":
-            await query.answer("Показываю информацию...")
-            fake_message = Message(
-                message_id=query.message.message_id,
-                date=query.message.date,
-                chat=query.message.chat,
-                from_user=query.from_user
-            )
-            fake_update = Update(update_id=update.update_id, message=fake_message)
-            await myinfo_command(fake_update, context)
+        elif data == "config_info":
+            await query.answer("Показываю информацию о конфиге...")
+            user = db.get_user(user_id)
+            if not user:
+                await query.edit_message_text("❌ Пользователь не найден.")
+                return
+            
+            limit = user.get("config_limit", 0)
+            created = user.get("configs_created", 0)
+            remaining = max(0, limit - created)
+            
+            user_configs = db.get_user_configs(user_id)
+            config_count = len(user_configs) if user_configs else 0
+            
+            info_text = f"""
+📊 Информация о ваших конфигах:
+
+• Лимит конфигов: {limit}
+• Создано конфигов: {created}
+• Осталось создать: {remaining}
+• Всего конфигов в базе: {config_count}
+
+💡 Используйте кнопку '✨ Создать клиента' для создания нового конфига.
+"""
+            
+            await query.edit_message_text(info_text)
             return
-        elif data == "help_menu":
-            await query.answer("Показываю справку...")
-            fake_message = Message(
-                message_id=query.message.message_id,
-                date=query.message.date,
-                chat=query.message.chat,
-                from_user=query.from_user
-            )
-            fake_update = Update(update_id=update.update_id, message=fake_message)
-            await help_command(fake_update, context)
+        elif data == "contact_admin":
+            await query.answer("Открываю контакты администратора...")
+            admin_text = """
+💬 Связь с администратором:
+
+👤 Администраторы:
+• @ImmoLateNeltharion
+• @r00tfu11
+
+📝 Для связи с администратором:
+1. Напишите одному из администраторов в Telegram
+2. Укажите ваш username: @{username}
+3. Опишите вашу проблему или вопрос
+
+💡 Администратор может помочь с:
+• Увеличением лимита конфигов
+• Решением технических проблем
+• Вопросами по использованию бота
+""".format(username=username or "не указан")
+            
+            await query.edit_message_text(admin_text)
             return
         elif data.startswith("create_"):
             # Создать клиента для inbound

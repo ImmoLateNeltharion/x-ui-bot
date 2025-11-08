@@ -193,6 +193,35 @@ class Database:
         
         return True, f"Осталось конфигов: {limit - created - 1}/{limit}"
     
+    def get_user_configs(self, user_id: int) -> List[Dict]:
+        """Получить все конфиги пользователя"""
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                SELECT email, inbound_id, issued_at 
+                FROM issued_configs 
+                WHERE user_id = ?
+                ORDER BY issued_at DESC
+            """, (user_id,))
+            
+            rows = cursor.fetchall()
+            conn.close()
+            
+            configs = []
+            for row in rows:
+                configs.append({
+                    "email": row[0],
+                    "inbound_id": row[1],
+                    "issued_at": row[2]
+                })
+            
+            return configs
+        except Exception as e:
+            logger.error(f"Ошибка получения конфигов пользователя: {e}")
+            return []
+    
     def record_issued_config(self, user_id: int, email: str, inbound_id: int) -> bool:
         """Записать выданный конфиг"""
         try:
