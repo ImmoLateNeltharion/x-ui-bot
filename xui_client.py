@@ -707,9 +707,15 @@ class XUIClient:
             }
             
             # Обновляем inbound - пробуем разные варианты URL для 3x-ui
+            # Используем те же пути, что и для добавления клиента, но для обновления
             update_urls_to_try = [
+                # Варианты с /inbounds/ (с 's') - как в addClient и get_inbounds
+                f"{self.base_url}/panel/api/inbounds/update/{inbound_id}",
+                f"{self.base_url}/panel/panel/api/inbounds/update/{inbound_id}",
+                # Варианты с /inbound/ (без 's')
                 f"{self.base_url}/panel/api/inbound/update/{inbound_id}",
                 f"{self.base_url}/panel/panel/api/inbound/update/{inbound_id}",
+                # Варианты без /api/
                 f"{self.base_url}/panel/panel/inbound/update/{inbound_id}",
                 f"{self.base_url}/panel/inbound/update/{inbound_id}",
             ]
