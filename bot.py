@@ -651,7 +651,7 @@ async def create_client(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         
         reply_markup = InlineKeyboardMarkup(keyboard)
-        logger.info(f"Отправляю сообщение с {len(keyboard)} кнопками")
+        logger.info(f"Отправляю сообщение с {len(keyboard)} строками кнопок, всего {sum(len(row) for row in keyboard)} кнопок")
         await loading_msg.edit_text(text, reply_markup=reply_markup)
         
     except Exception as e:
