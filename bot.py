@@ -809,13 +809,23 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     expire_date = datetime.fromtimestamp(expire / 1000)
                     text += f"⏰ Истекает: {expire_date.strftime('%Y-%m-%d %H:%M')}\n"
                 text += "─" * 20 + "\n\n"
+            
+            # Добавляем кнопки для каждого клиента в одну строку (2 кнопки в ряд)
+            buttons_per_row = 2
+            for i, client in enumerate(clients):
+                email = client.get("email", "N/A")
                 
-                keyboard.append([
+                if i % buttons_per_row == 0:
+                    # Начинаем новую строку
+                    keyboard.append([])
+                
+                # Добавляем кнопку для получения конфига
+                keyboard[-1].append(
                     InlineKeyboardButton(
-                        f"📥 Получить конфиг ({email})",
+                        f"📥 {email[:15]}",
                         callback_data=f"get_{inbound_id}_{email}"
                     )
-                ])
+                )
             
             reply_markup = InlineKeyboardMarkup(keyboard)
             await query.edit_message_text(text, reply_markup=reply_markup)
