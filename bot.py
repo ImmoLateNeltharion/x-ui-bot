@@ -693,16 +693,21 @@ async def _create_client_for_inbound(update: Update, context: ContextTypes.DEFAU
         
         # Показываем сообщение о создании
         if hasattr(update, 'callback_query'):
-            await update.callback_query.answer("⏳ Создаю клиента...")
-            await update.callback_query.edit_message_text(f"⏳ Создаю нового клиента для inbound {inbound_id}...")
+            await update.callback_query.answer("⏳ Создаю конфиг...")
+            await update.callback_query.edit_message_text("⏳ Создаю конфиг...")
         else:
-            await update.message.reply_text(f"⏳ Создаю нового клиента для inbound {inbound_id}...")
+            await update.message.reply_text("⏳ Создаю конфиг...")
         
-        # Генерируем email на основе user_id
-        email = f"user_{user_id}@bot.local"
+        # Используем username как email клиента
+        email = username
         
-        # Добавляем клиента
-        success = xui_client.add_client_to_inbound(inbound_id, email)
+        # Вычисляем expire_time в миллисекундах (31 день)
+        from datetime import datetime, timedelta
+        expire_date = datetime.now() + timedelta(days=CONFIG_EXPIRY_DAYS)
+        expire_time = int(expire_date.timestamp() * 1000)
+        
+        # Добавляем клиента с expire_time
+        success = xui_client.add_client_to_inbound(inbound_id, email, expire_time=expire_time)
         
         if not success:
             error_msg = "❌ Не удалось создать клиента. Возможно, клиент с таким email уже существует."
@@ -789,34 +794,25 @@ async def _create_client_for_inbound(update: Update, context: ContextTypes.DEFAU
             limit = user.get("config_limit", 0) if user else 0
             created = user.get("configs_created", 0) if user else 0
             
-            welcome_text = f"""
-🤖 Привет! Я бот для получения VPN конфигураций из x-ui.
-
-📊 Ваш статус:
-• Лимит конфигов: {limit}
-• Использовано: {created}/{limit}
+            welcome_text = """
+🤖 Привет! Я бот для получения VPN конфигураций.
 
 📋 Доступные команды:
-/create [inbound_id] - Создать нового клиента (лимит: 1 по умолчанию)
-/list - Список всех inbounds
-/clients <inbound_id> - Список клиентов для inbound
-/get <email> - Получить конфигурацию по email
-/myinfo - Моя информация
-/help - Показать справку
+• Создание конфига
+• Скачивание конфига
+• Информация о конфиге
+• Связь с администратором
 
-💡 Используйте /list чтобы увидеть доступные серверы.
+💡 Используйте кнопки ниже для работы с ботом.
 """
-            
-            if is_admin(username):
-                welcome_text += "\n🔧 Админские команды:\n/adminhelp - Справка по админским командам"
             
             # Добавляем кнопки для быстрого доступа
             keyboard = [
                 [
-                    InlineKeyboardButton("✨ Создать клиента", callback_data="create_menu")
+                    InlineKeyboardButton("✨ Создать конфиг", callback_data="create_config")
                 ],
                 [
-                    InlineKeyboardButton("📥 Получить свой конфиг", callback_data="get_my_config")
+                    InlineKeyboardButton("📥 Скачать конфиг", callback_data="download_config")
                 ],
                 [
                     InlineKeyboardButton("📊 Информация о конфиге", callback_data="config_info")
