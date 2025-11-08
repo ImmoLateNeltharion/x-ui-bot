@@ -214,6 +214,8 @@ async def admin_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 /sync_reminders - Синхронизировать напоминания из x-ui
 
+/cleardb - Очистить всю базу данных (удалить все данные)
+
 💡 Username можно указывать с @ или без него.
 """
     await update.message.reply_text(help_text)
@@ -1193,6 +1195,7 @@ def main():
     application.add_handler(CommandHandler("adduser", add_user_command))
     application.add_handler(CommandHandler("setlimit", set_limit_command))
     application.add_handler(CommandHandler("users", list_users_command))
+    application.add_handler(CommandHandler("cleardb", clear_database_command))
     application.add_handler(CommandHandler("sync_reminders", sync_reminders_command))
     
     application.add_handler(CallbackQueryHandler(button_callback))
