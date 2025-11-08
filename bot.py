@@ -373,11 +373,11 @@ async def list_inbounds(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     try:
-        await update.message.reply_text("⏳ Получаю список серверов...")
+        loading_msg = await update.message.reply_text("⏳ Получаю список серверов...")
         inbounds = xui_client.get_inbounds()
         
         if not inbounds:
-            await update.message.reply_text("❌ Не удалось получить список inbounds или список пуст.")
+            await loading_msg.edit_text("❌ Не удалось получить список inbounds или список пуст.")
             return
         
         text = "📋 Список доступных inbounds:\n\n"
@@ -405,8 +405,12 @@ async def list_inbounds(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
             ])
         
+        if not keyboard:
+            await loading_msg.edit_text("❌ Не удалось создать кнопки.")
+            return
+        
         reply_markup = InlineKeyboardMarkup(keyboard)
-        await update.message.reply_text(text, reply_markup=reply_markup)
+        await loading_msg.edit_text(text, reply_markup=reply_markup)
         
     except Exception as e:
         logger.error(f"Ошибка в list_inbounds: {e}")
@@ -585,13 +589,13 @@ async def create_client(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Иначе показываем список inbounds с кнопками
     try:
-        await update.message.reply_text("⏳ Получаю список серверов...")
+        loading_msg = await update.message.reply_text("⏳ Получаю список серверов...")
         inbounds = xui_client.get_inbounds()
         
         logger.info(f"Получено inbounds: {len(inbounds) if inbounds else 0}")
         
         if not inbounds:
-            await update.message.reply_text(
+            await loading_msg.edit_text(
                 "❌ Не удалось получить список inbounds или список пуст.\n"
                 "Проверьте подключение к x-ui панели."
             )
@@ -621,14 +625,14 @@ async def create_client(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ])
         
         if not keyboard:
-            await update.message.reply_text(
+            await loading_msg.edit_text(
                 "❌ Не удалось создать кнопки для выбора сервера."
             )
             return
         
         reply_markup = InlineKeyboardMarkup(keyboard)
         logger.info(f"Отправляю сообщение с {len(keyboard)} кнопками")
-        await update.message.reply_text(text, reply_markup=reply_markup)
+        await loading_msg.edit_text(text, reply_markup=reply_markup)
         
     except Exception as e:
         logger.error(f"Ошибка в create_client: {e}")
