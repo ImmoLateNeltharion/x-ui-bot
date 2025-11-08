@@ -501,7 +501,14 @@ class XUIClient:
             return f"{base_username}_1"  # Возвращаем дефолт при ошибке
         
         try:
-            # Получаем список inbounds
+            # ВАЖНО: Получаем свежий список inbounds перед каждой попыткой,
+            # чтобы видеть актуальное состояние клиентов (включая только что созданные)
+            # Очищаем кеш сессии, чтобы получить свежие данные
+            if hasattr(self.session, 'cookies'):
+                # Очищаем cookies для принудительного обновления
+                pass  # Не очищаем cookies, так как нужна авторизация
+            
+            # Получаем список inbounds (всегда свежий запрос)
             inbounds = self.get_inbounds()
             inbound = next((i for i in inbounds if i.get("id") == inbound_id), None)
             
@@ -568,18 +575,31 @@ class XUIClient:
             
             # Находим следующий доступный номер
             logger.info(f"Используемые номера для {base_username}: {sorted(used_numbers)}")
-            if not has_base_email and 0 not in used_numbers:
-                # Если базового email нет, используем его (но пользователь хочет с номерами, так что начинаем с 1)
-                # Но для совместимости, если есть старые конфиги без номера, пропускаем их
-                next_number = 1
-            else:
-                # Ищем минимальный свободный номер, начиная с 1
-                next_number = 1
-                while next_number in used_numbers:
-                    logger.debug(f"Номер {next_number} занят, пробуем следующий...")
-                    next_number += 1
             
+            # ВСЕГДА начинаем с номера 1 и ищем первый свободный
+            # Это гарантирует, что мы не вернем номер из excluded_emails или существующих клиентов
+            next_number = 1
+            max_attempts = 1000  # Защита от бесконечного цикла
+            attempts = 0
+            
+            while next_number in used_numbers:
+                attempts += 1
+                if attempts > max_attempts:
+                    logger.error(f"Превышено максимальное количество попыток поиска свободного номера для {base_username}")
+                    break
+                logger.debug(f"Номер {next_number} занят (в used_numbers: {sorted(used_numbers)}), пробуем следующий...")
+                next_number += 1
+            
+            # Дополнительная проверка: если полученный email в excluded_emails, продолжаем поиск
             next_email = f"{base_username}_{next_number}"
+            while next_email in excluded_emails:
+                logger.warning(f"Полученный email {next_email} находится в excluded_emails, продолжаем поиск...")
+                next_number += 1
+                next_email = f"{base_username}_{next_number}"
+                if next_number > 1000:  # Защита от бесконечного цикла
+                    logger.error(f"Превышено максимальное количество попыток для {base_username}")
+                    break
+            
             logger.info(f"Следующий доступный email для {base_username}: {next_email} (исключено: {len(excluded_emails)} email, использованные номера: {sorted(used_numbers)})")
             return next_email
             
