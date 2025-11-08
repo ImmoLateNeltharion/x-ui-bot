@@ -114,30 +114,43 @@ class XUIClient:
             # Пробуем разные варианты URL и методов
             # x-ui использует /panel/panel/... для API endpoints
             # Приоритет: сначала пробуем наиболее вероятные варианты
+            # Важно: некоторые версии x-ui требуют POST с пустым телом или определенными параметрами
             url_methods = [
                 # POST запросы (x-ui часто использует POST для API)
-                (f"{self.base_url}/panel/panel/inbounds", "POST"),
                 (f"{self.base_url}/panel/panel/inbound/list", "POST"),
-                (f"{self.base_url}/panel/panel/api/inbounds", "POST"),
                 (f"{self.base_url}/panel/panel/api/inbound/list", "POST"),
-                # GET запросы
-                (f"{self.base_url}/panel/panel/inbounds", "GET"),
+                (f"{self.base_url}/panel/panel/inbounds", "POST"),
+                (f"{self.base_url}/panel/panel/api/inbounds", "POST"),
+                # GET запросы (могут возвращать HTML, но пробуем с правильными заголовками)
                 (f"{self.base_url}/panel/panel/inbound/list", "GET"),
-                (f"{self.base_url}/panel/panel/api/inbounds", "GET"),
                 (f"{self.base_url}/panel/panel/api/inbound/list", "GET"),
+                (f"{self.base_url}/panel/panel/inbounds", "GET"),
+                (f"{self.base_url}/panel/panel/api/inbounds", "GET"),
             ]
             
             for url, method in url_methods:
                 logger.info(f"Попытка запроса списка inbounds: {method} {url}")
                 try:
-                    if method == "GET":
-                        response = self.session.get(url, timeout=10)
-                    else:
-                        response = self.session.post(url, json={}, timeout=10)
+                    # Устанавливаем заголовки для JSON API
+                    headers = {
+                        "Accept": "application/json",
+                        "Content-Type": "application/json"
+                    }
                     
-                    logger.info(f"Ответ получения inbounds: статус {response.status_code}")
+                    if method == "GET":
+                        response = self.session.get(url, headers=headers, timeout=10, allow_redirects=True)
+                    else:
+                        response = self.session.post(url, json={}, headers=headers, timeout=10, allow_redirects=True)
+                    
+                    logger.info(f"Ответ получения inbounds: статус {response.status_code}, Content-Type: {response.headers.get('Content-Type', 'unknown')}")
                     
                     if response.status_code == 200:
+                        # Проверяем, что ответ JSON, а не HTML
+                        content_type = response.headers.get('Content-Type', '').lower()
+                        if 'application/json' not in content_type and 'text/html' in content_type:
+                            logger.debug(f"Получен HTML вместо JSON для {method} {url}, пробуем следующий вариант")
+                            continue
+                        
                         try:
                             data = response.json()
                             logger.info(f"Ответ API: success={data.get('success')}, obj type={type(data.get('obj'))}")
@@ -152,6 +165,10 @@ class XUIClient:
                                 error_msg = data.get('msg', 'Unknown error')
                                 logger.warning(f"API вернул success=False: {error_msg}")
                         except json.JSONDecodeError as e:
+                            # Если получили HTML вместо JSON, пробуем следующий вариант
+                            if response.text.strip().startswith('<!DOCTYPE') or response.text.strip().startswith('<html'):
+                                logger.debug(f"Получен HTML вместо JSON для {method} {url}, пробуем следующий вариант")
+                                continue
                             logger.warning(f"Ошибка парсинга JSON: {e}, текст: {response.text[:200]}")
                     elif response.status_code == 404:
                         # 404 - просто пробуем следующий вариант
