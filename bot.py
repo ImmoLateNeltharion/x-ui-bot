@@ -807,28 +807,49 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Обработка кнопок меню
         if data == "create_menu":
             await query.answer("Открываю меню создания клиента...")
-            # Вызываем функцию create_client
-            fake_update = Update(update_id=update.update_id, message=None, callback_query=query)
-            fake_context = context
-            await create_client(fake_update, fake_context)
+            # Создаем фейковое сообщение для вызова create_client
+            from telegram import Message, Chat, User
+            fake_message = Message(
+                message_id=query.message.message_id,
+                date=query.message.date,
+                chat=query.message.chat,
+                from_user=query.from_user
+            )
+            fake_update = Update(update_id=update.update_id, message=fake_message)
+            await create_client(fake_update, context)
             return
         elif data == "list_menu":
             await query.answer("Открываю список серверов...")
-            fake_update = Update(update_id=update.update_id, message=None, callback_query=query)
-            fake_context = context
-            await list_inbounds(fake_update, fake_context)
+            fake_message = Message(
+                message_id=query.message.message_id,
+                date=query.message.date,
+                chat=query.message.chat,
+                from_user=query.from_user
+            )
+            fake_update = Update(update_id=update.update_id, message=fake_message)
+            await list_inbounds(fake_update, context)
             return
         elif data == "myinfo_menu":
             await query.answer("Показываю информацию...")
-            fake_update = Update(update_id=update.update_id, message=None, callback_query=query)
-            fake_context = context
-            await myinfo_command(fake_update, fake_context)
+            fake_message = Message(
+                message_id=query.message.message_id,
+                date=query.message.date,
+                chat=query.message.chat,
+                from_user=query.from_user
+            )
+            fake_update = Update(update_id=update.update_id, message=fake_message)
+            await myinfo_command(fake_update, context)
             return
         elif data == "help_menu":
             await query.answer("Показываю справку...")
-            fake_update = Update(update_id=update.update_id, message=None, callback_query=query)
-            fake_context = context
-            await help_command(fake_update, fake_context)
+            fake_message = Message(
+                message_id=query.message.message_id,
+                date=query.message.date,
+                chat=query.message.chat,
+                from_user=query.from_user
+            )
+            fake_update = Update(update_id=update.update_id, message=fake_message)
+            await help_command(fake_update, context)
             return
         elif data.startswith("create_"):
             # Создать клиента для inbound
