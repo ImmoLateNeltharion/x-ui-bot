@@ -5,7 +5,7 @@ import logging
 import asyncio
 from datetime import datetime, timedelta
 from typing import Optional
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, Message, Chat, User
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, Message, Chat, User, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -100,20 +100,45 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
     
+    # Проверяем наличие username
+    if not username:
+        welcome_text = """
+❌ Для работы с ботом необходимо установить username в настройках Telegram.
+
+📝 Инструкция:
+1. Откройте настройки Telegram
+2. Перейдите в "Имя пользователя" (Username)
+3. Установите username
+4. Вернитесь в бота и отправьте /start
+
+💡 Username нужен для создания и получения конфигураций.
+"""
+        # Добавляем Reply кнопку "Меню"
+        reply_keyboard = [
+            [KeyboardButton("Меню")]
+        ]
+        reply_markup = ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True)
+        await update.message.reply_text(welcome_text, reply_markup=reply_markup)
+        return
+    
     welcome_text = """
 🤖 Привет! Я бот для получения VPN конфигураций.
 
-📋 Доступные команды:
-• Создание конфига
-• Скачивание конфига
-• Информация о конфиге
-• Связь с администратором
+📋 Что нужно сделать, чтобы начать:
+1. ✅ У вас установлен username: @{username}
+2. 📱 Используйте кнопки ниже для работы с ботом
 
-💡 Используйте кнопки ниже для работы с ботом.
-"""
+📋 Доступные команды:
+• ✨ Создать конфиг - создать новый конфиг на 31 день
+• 📥 Скачать конфиг - получить ваш конфиг
+• 📊 Информация о конфиге - объем данных и срок действия
+• 💬 Связь с администратором - связаться с админом
+
+💡 Используйте кнопки ниже или команду /start для открытия меню.
+""".format(username=username)
     
-    # Добавляем кнопки для быстрого доступа
-    keyboard = [
+    # Добавляем Inline кнопки для быстрого доступа
+    inline_keyboard = [
         [
             InlineKeyboardButton("✨ Создать конфиг", callback_data="create_config")
         ],
@@ -127,9 +152,16 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             InlineKeyboardButton("💬 Связь с администратором", callback_data="contact_admin")
         ]
     ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
+    inline_markup = InlineKeyboardMarkup(inline_keyboard)
+    
+    # Добавляем Reply кнопку "Меню"
+    reply_keyboard = [
+        [KeyboardButton("Меню")]
+    ]
+    reply_markup = ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True)
     
     await update.message.reply_text(welcome_text, reply_markup=reply_markup)
+    await update.message.reply_text("💡 Используйте кнопки выше для работы с ботом.", reply_markup=inline_markup)
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
