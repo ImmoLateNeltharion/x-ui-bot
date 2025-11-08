@@ -1030,19 +1030,39 @@ async def _create_client_for_inbound(update: Update, context: ContextTypes.DEFAU
                 await update.message.reply_text(error_msg)
             return
         
-        email = xui_client.get_next_available_email(inbound_id, username)
-        logger.info(f"Используется email с номером: {email} для пользователя {username}")
-        
         # Вычисляем expire_time в миллисекундах (31 день)
         from datetime import datetime, timedelta
         expire_date = datetime.now() + timedelta(days=CONFIG_EXPIRY_DAYS)
         expire_time = int(expire_date.timestamp() * 1000)
         
-        # Добавляем клиента с expire_time
-        success = xui_client.add_client_to_inbound(inbound_id, email, expire_time=expire_time)
+        # Пытаемся создать конфиг с повторными попытками (на случай race condition)
+        max_attempts = 3
+        success = False
+        email = None
+        
+        for attempt in range(max_attempts):
+            # Получаем следующий доступный email
+            email = xui_client.get_next_available_email(inbound_id, username)
+            logger.info(f"Попытка {attempt + 1}/{max_attempts}: Используется email {email} для пользователя {username}")
+            
+            # Пытаемся добавить клиента
+            success = xui_client.add_client_to_inbound(inbound_id, email, expire_time=expire_time)
+            
+            if success:
+                logger.info(f"✅ Конфиг успешно создан с email {email}")
+                break
+            else:
+                logger.warning(f"⚠️ Попытка {attempt + 1} не удалась для email {email}, пробуем следующий...")
+                # Небольшая задержка перед следующей попыткой
+                import asyncio
+                await asyncio.sleep(0.5)
         
         if not success:
-            error_msg = "❌ Не удалось создать клиента. Возможно, клиент с таким email уже существует."
+            error_msg = (
+                f"❌ Не удалось создать клиента после {max_attempts} попыток.\n"
+                f"💡 Последний использованный email: {email}\n"
+                f"💡 Возможно, все доступные номера заняты или произошла ошибка."
+            )
             if hasattr(update, 'callback_query'):
                 await update.callback_query.edit_message_text(error_msg)
             else:
