@@ -75,7 +75,11 @@ class XUIClient:
     
     def get_inbounds(self) -> List[Dict[str, Any]]:
         """Получить список всех inbounds"""
-        self._ensure_authenticated()
+        try:
+            self._ensure_authenticated()
+        except Exception as e:
+            print(f"Ошибка авторизации: {e}")
+            return []
         
         try:
             url = f"{self.base_url}/panel/inbound/list"
@@ -84,7 +88,12 @@ class XUIClient:
             if response.status_code == 200:
                 data = response.json()
                 if data.get("success"):
-                    return data.get("obj", [])
+                    inbounds = data.get("obj", [])
+                    return inbounds if inbounds else []
+                else:
+                    print(f"Ошибка API: {data.get('msg', 'Unknown error')}")
+            else:
+                print(f"HTTP ошибка: {response.status_code}, ответ: {response.text[:200]}")
             return []
         except Exception as e:
             print(f"Ошибка получения inbounds: {e}")
